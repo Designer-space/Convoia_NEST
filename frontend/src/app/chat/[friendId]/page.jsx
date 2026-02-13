@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+export const dynamic = "force-dynamic";
 
 export default function ChatWithFriendPage() {
   const params = useParams();

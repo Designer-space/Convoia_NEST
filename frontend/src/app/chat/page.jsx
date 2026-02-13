@@ -15,6 +15,7 @@ import {
   Send,
   User,
 } from "lucide-react";
+export const dynamic = "force-dynamic";
 
 function getDisplayName(conversation) {
   if (conversation.type === "GROUP" && conversation.name) {
