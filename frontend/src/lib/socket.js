@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 
 const defaultBase = typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_BASE_URL
   ? process.env.NEXT_PUBLIC_API_BASE_URL
-  : "http://localhost:3000";
+  : "https://convoia-nest.onrender.com";
 
 let socket = null;
 let chatSocket = null;

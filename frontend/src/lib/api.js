@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Shared Axios instance
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000",
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "https://convoia-nest.onrender.com",
 });
 
 // Attach auth token from localStorage when in the browser

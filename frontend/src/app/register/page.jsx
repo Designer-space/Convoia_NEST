@@ -97,7 +97,7 @@ export default function RegisterPage() {
 
     try {
       // Replace with your actual API endpoint
-      const response = await fetch('http://localhost:3000/auth/register', {
+      const response = await fetch('https://convoia-nest.onrender.com/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
