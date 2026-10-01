@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Socket } from 'socket.io';
+import { getJwtSecret } from 'src/config/env';
 
 /**
  * Guard for Socket.IO connection handshake (before connection is established)
@@ -27,7 +28,7 @@ export class WsJwtConnectionGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'default',
+        secret: getJwtSecret(),
       });
       // Attach user info to socket data
       client.data.user = { userId: payload.sub, email: payload.email };

@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { sampleUser } from 'src/utils/sampleUsers';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/user/entity/user.entity';
@@ -20,9 +19,8 @@ export class AuthService {
     const newUser = this.userRepository.create({ name, username, email, password: hashedPassword });
     const foundUser = await this.userRepository.save(newUser);
 
-    const payload = {sub: foundUser.id, email: foundUser.email};    
-    const jwtService = new JwtService({ secret: process.env.JWT_SECRET || 'default' });
-    const access_token = jwtService.sign(payload);
+    const payload = {sub: foundUser.id, email: foundUser.email};
+    const access_token = this.jwtService.sign(payload);
     return { message: 'User registered successfully', access_token };
 }
 
@@ -31,9 +29,8 @@ export class AuthService {
     if (!foundUser) throw new UnauthorizedException('No User Found');
     const isPasswordValid = await bcrypt.compare(password, foundUser?.password);
     if (!foundUser || !isPasswordValid) throw new UnauthorizedException('Invalid credentials');
-    const payload = {sub: foundUser.id, email: foundUser.email};    
-    const jwtService = new JwtService({ secret: process.env.JWT_SECRET || 'default' });
-    const access_token = jwtService.sign(payload);
+    const payload = {sub: foundUser.id, email: foundUser.email};
+    const access_token = this.jwtService.sign(payload);
     return {
         message: 'Login successful',
         access_token,

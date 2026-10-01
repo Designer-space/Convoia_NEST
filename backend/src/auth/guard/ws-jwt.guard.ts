@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Socket } from 'socket.io';
+import { getJwtSecret } from 'src/config/env';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
@@ -21,7 +22,7 @@ export class WsJwtGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'default',
+        secret: getJwtSecret(),
       });
       // Attach user info to socket data for later use
       client.data.user = { userId: payload.sub, email: payload.email };

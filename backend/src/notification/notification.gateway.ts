@@ -6,6 +6,7 @@ import {
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
+import { getJwtSecret } from 'src/config/env';
 
 @WebSocketGateway({
   cors: { origin: "*" },
@@ -31,7 +32,7 @@ export class NotificationGateway
       }
 
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'default',
+        secret: getJwtSecret(),
       });
       const userId = payload.sub;
       if (!userId) {

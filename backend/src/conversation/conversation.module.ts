@@ -11,6 +11,7 @@ import { ConversationService } from './conversation.service';
 import { MessageService } from './message.service';
 import { ConversationController } from './conversation.controller';
 import { ChatGateway } from './chat.gateway';
+import { getJwtSecret } from 'src/config/env';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { ChatGateway } from './chat.gateway';
     ]),
     MongooseModule.forFeature([{ name: Message.name, schema: MessageSchema }]),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'default',
+      secret: getJwtSecret(),
     }),
   ],
   controllers: [ConversationController],

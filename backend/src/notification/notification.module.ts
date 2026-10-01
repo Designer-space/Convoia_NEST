@@ -4,12 +4,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { Notification } from './entity/notification.entity';
 import { NotificationService } from './notification.service';
 import { NotificationGateway } from './notification.gateway';
+import { getJwtSecret } from 'src/config/env';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Notification]),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'default',
+      secret: getJwtSecret(),
     }),
   ],
   providers: [

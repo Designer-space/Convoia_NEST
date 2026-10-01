@@ -6,13 +6,14 @@ import { RequestService } from './request.service';
 import { FriendRequest } from './entity/friendrequest.entity.js';
 import { User } from '../user/entity/user.entity';
 import { NotificationModule } from 'src/notification/notification.module';
+import { getJwtSecret } from 'src/config/env';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([FriendRequest, User]),
         NotificationModule,
         JwtModule.register({
-            secret: process.env.JWT_SECRET || 'default',
+            secret: getJwtSecret(),
             signOptions: { expiresIn: '1h' },
         })
     ],
