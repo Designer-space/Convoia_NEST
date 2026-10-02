@@ -3,6 +3,7 @@ import { UserService } from './user.service';
 import { JwtAuthGuard } from 'src/auth/guard/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { avatarStorage } from 'src/cloudinary/cloudinary.storage';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('user')
 export class UserController {
@@ -27,11 +28,12 @@ export class UserController {
             storage: avatarStorage,
         }),
     )
-    updatePersonalProfile(@Req() req: any, @Body() updateData: Partial<any>, @UploadedFile() file?: Express.Multer.File) {
+    updatePersonalProfile(@Req() req: any, @Body() updateData: UpdateProfileDto, @UploadedFile() file?: Express.Multer.File) {
+        const data: Record<string, any> = { ...updateData };
         if (file) {
-            updateData.avatar = file.path;
-            updateData.avatarPublicId = (file as any).filename;
+            data.avatar = file.path;
+            data.avatarPublicId = (file as any).filename;
         }
-        return this.userService.updatePersonalProfile(req.user.userId, updateData);
+        return this.userService.updatePersonalProfile(req.user.userId, data);
     }
 }

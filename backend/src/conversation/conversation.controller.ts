@@ -12,7 +12,9 @@ import {
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { ConversationService } from './conversation.service';
 import { MessageService } from './message.service';
-import { ConversationType } from './entity/conversation.entity';
+import { CreateConversationDto } from './dto/create-conversation.dto';
+import { SendMessageDto } from './dto/send-message.dto';
+import { MarkReadDto } from './dto/mark-read.dto';
 
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
@@ -22,23 +24,16 @@ export class ConversationController {
     private readonly messageService: MessageService,
   ) {}
 
-  /** Chat list: all conversations for the current user with last message cache */
   @Get()
   async getConversations(@Req() req: any) {
     const userId = req.user.userId;
     return this.conversationService.getConversationsForUser(userId);
   }
 
-  /** Get or create DM with a friend (participantIds = [friendId]) */
   @Post()
   async createConversation(
     @Req() req: any,
-    @Body()
-    body: {
-      type: ConversationType;
-      participantIds: number[];
-      name?: string;
-    },
+    @Body() body: CreateConversationDto,
   ) {
     const userId = req.user.userId;
     const conversation = await this.conversationService.createConversation(userId, {
@@ -57,7 +52,6 @@ export class ConversationController {
     };
   }
 
-  /** Get single conversation (must be participant) */
   @Get(':id')
   async getConversation(
     @Req() req: any,
@@ -80,7 +74,6 @@ export class ConversationController {
     };
   }
 
-  /** Get messages for a conversation (paginated) */
   @Get(':id/messages')
   async getMessages(
     @Req() req: any,
@@ -93,12 +86,11 @@ export class ConversationController {
     return this.messageService.getMessages(id, userId, limitNum, before);
   }
 
-  /** Send a text message (future: type, attachments via body) */
   @Post(':id/messages')
   async sendMessage(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { content?: string; replyToMessageId?: string | null },
+    @Body() body: SendMessageDto,
   ) {
     const userId = req.user.userId;
     const message = await this.messageService.sendMessage(id, userId, {
@@ -111,12 +103,11 @@ export class ConversationController {
     };
   }
 
-  /** Future: mark conversation as read (read receipts) */
   @Post(':id/read')
   async markAsRead(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { messageIds?: string[] },
+    @Body() body: MarkReadDto,
   ) {
     const userId = req.user.userId;
     await this.messageService.markAsRead(id, userId, body.messageIds);
