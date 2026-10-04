@@ -9,20 +9,20 @@ import { RequestModule } from './request/request.module';
 import * as dotenv from 'dotenv';
 import { NotificationModule } from './notification/notification.module';
 import { ConversationModule } from './conversation/conversation.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 dotenv.config();
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.PGADMIN_URI,
-      // host: process.env.DB_HOST || 'localhost',
-      // port: parseInt(process.env.DB_PORT || '5432'),
-      // username: process.env.DB_USER || 'postgres',
-      // password: process.env.DB_PASSWORD || '123456',
-      // database: process.env.DB_NAME || 'postgres',
       autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: process.env.NODE_ENV === 'development',
     }),
     MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/chat'),
     UserModule,
