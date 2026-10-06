@@ -142,7 +142,6 @@ export class MessageService {
     };
   }
 
-  /** Future: mark message(s) as read for a user (read receipts) */
   async markAsRead(
     conversationId: number,
     userId: number,
@@ -153,10 +152,13 @@ export class MessageService {
 
     const readAt = new Date();
     if (messageIds?.length) {
-      await this.messageModel.updateMany(
-        { _id: { $in: messageIds }, conversationId },
-        { $addToSet: { readBy: { userId, readAt } } },
-      );
+      const validIds = messageIds.filter((id) => /^[a-f\d]{24}$/i.test(id));
+      if (validIds.length > 0) {
+        await this.messageModel.updateMany(
+          { _id: { $in: validIds }, conversationId },
+          { $addToSet: { readBy: { userId, readAt } } },
+        );
+      }
     }
     await this.conversationService.markAsRead(conversationId, userId);
   }

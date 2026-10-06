@@ -20,18 +20,18 @@ export class RequestController {
     }
 
     @Post("request/:receiverId")
-    sendFriendRequest(@Req() req: any, @Param() param: any){
-        return this.friendRequestServices.sendFriendRequest(req.user.userId, Number(param.receiverId))
+    sendFriendRequest(@Req() req: any, @Param('receiverId', ParseIntPipe) receiverId: number){
+        return this.friendRequestServices.sendFriendRequest(req.user.userId, receiverId)
     }
 
     @Post("accept/:requestId")
-    acceptFriendRequest(@Req() req:any, @Param() param: any){
-        return this.friendRequestServices.acceptFriendRequest(req.user.userId, param.requestId)
+    acceptFriendRequest(@Req() req:any, @Param('requestId', ParseIntPipe) requestId: number){
+        return this.friendRequestServices.acceptFriendRequest(req.user.userId, requestId)
     }
 
     @Post("reject/:requestId")
-    rejectFriendRequest(@Req() req:any, @Param() param: any){
-        return this.friendRequestServices.rejectFriendRequest(req.user.userId, param.requestId)
+    rejectFriendRequest(@Req() req:any, @Param('requestId', ParseIntPipe) requestId: number){
+        return this.friendRequestServices.rejectFriendRequest(req.user.userId, requestId)
     }
 
     @Get("nonfriends")
