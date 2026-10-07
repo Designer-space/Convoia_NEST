@@ -1,26 +1,120 @@
 @import "tailwindcss";
 
+/* ============================================================
+   CONVOIA THEME SYSTEM
+   4 Themes: light | light-saturated | dark | dark-neon
+   Stored in: localStorage key "convoia-theme"
+   Applied to: <html data-theme="...">
+   ============================================================ */
+
+/* --- 1. Light Mode (Normal Saturation) --- */
+[data-theme="light"],
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-primary:    #3B82F6;
+  --color-secondary:  #64748B;
+  --color-bg:         #F8FAFC;
+  --color-surface:    #FFFFFF;
+  --color-text:       #0F172A;
+  --color-text-muted: #64748B;
+  --color-border:     #E2E8F0;
+  --color-hover:      #F1F5F9;
+  --color-active-text:#FFFFFF;
+  --shadow:           0 1px 3px rgba(0,0,0,0.1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* --- 2. Light Mode (High Saturation) --- */
+[data-theme="light-saturated"] {
+  --color-primary:    #EC4899;
+  --color-secondary:  #2563EB;
+  --color-bg:         #FDF2F8;
+  --color-surface:    #FFE4E6;
+  --color-text:       #4C0519;
+  --color-text-muted: #9F1239;
+  --color-border:     #FBCFE8;
+  --color-hover:      #FCE7F3;
+  --color-active-text:#FFFFFF;
+  --shadow:           0 1px 3px rgba(236,72,153,0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* --- 3. Dark Mode (Normal Saturation) --- */
+[data-theme="dark"] {
+  --color-primary:    #6366F1;
+  --color-secondary:  #475569;
+  --color-bg:         #0F172A;
+  --color-surface:    #1E293B;
+  --color-text:       #F8FAFC;
+  --color-text-muted: #94A3B8;
+  --color-border:     #334155;
+  --color-hover:      #1E293B;
+  --color-active-text:#FFFFFF;
+  --shadow:           0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* --- 4. Dark Mode (High Saturation / Neon) --- */
+[data-theme="dark-neon"] {
+  --color-primary:    #22D3EE;
+  --color-secondary:  #A855F7;
+  --color-bg:         #000000;
+  --color-surface:    #111111;
+  --color-text:       #4ADE80;
+  --color-text-muted: #22D3EE;
+  --color-border:     #164E63;
+  --color-hover:      #0A0A0A;
+  --color-active-text:#000000;
+  --shadow:           0 0 15px rgba(34,211,238,0.2);
+}
+
+/* ============================================================
+   BASE STYLES — consume CSS variables everywhere
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+html {
+  font-family: var(--font-geist-sans), 'Public Sans', sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+/* ============================================================
+   TAILWIND THEME BRIDGE
+   Maps CSS variables to Tailwind utility classes
+   ============================================================ */
+@theme inline {
+  --color-background:    var(--color-bg);
+  --color-foreground:    var(--color-text);
+  --color-t-primary:     var(--color-primary);
+  --color-t-secondary:   var(--color-secondary);
+  --color-t-surface:     var(--color-surface);
+  --color-t-muted:       var(--color-text-muted);
+  --color-t-border:      var(--color-border);
+  --color-t-hover:       var(--color-hover);
+  --font-sans:           var(--font-geist-sans);
+  --font-mono:           var(--font-geist-mono);
+}
+
+/* ============================================================
+   NEON GLOW EFFECTS (only active in dark-neon theme)
+   ============================================================ */
+[data-theme="dark-neon"] .neon-glow {
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+}
+[data-theme="dark-neon"] .neon-text {
+  text-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+/* ============================================================
+   HIGH CONTRAST FOCUS RINGS (accessibility)
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
