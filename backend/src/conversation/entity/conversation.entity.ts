@@ -8,7 +8,10 @@ import {
 } from 'typeorm';
 import { ConversationParticipant } from './conversation-participant.entity';
 
-export type ConversationType = 'DM' | 'GROUP';
+export enum ConversationType {
+  DM = 'DM',
+  GROUP = 'GROUP',
+}
 
 @Entity('conversations')
 export class Conversation {

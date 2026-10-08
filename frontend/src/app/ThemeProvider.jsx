@@ -53,10 +53,12 @@ export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(DEFAULT_THEME);
   const [mounted, setMounted] = useState(false);
 
-  // On mount: read from localStorage
+  // On mount: read what the blocking script applied to <html data-theme>,
+  // falling back to localStorage for backwards compatibility
   useEffect(() => {
+    const inline = document.documentElement.getAttribute("data-theme");
     const saved = localStorage.getItem(STORAGE_KEY);
-    const valid = THEMES.find((t) => t.id === saved);
+    const valid = THEMES.find((t) => t.id === (inline || saved));
     if (valid) setThemeState(valid.id);
     setMounted(true);
   }, []);
@@ -72,9 +74,6 @@ export function ThemeProvider({ children }) {
     const valid = THEMES.find((t) => t.id === id);
     if (valid) setThemeState(valid.id);
   };
-
-  // Prevent flash of wrong theme on first render
-  if (!mounted) return null;
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, themes: THEMES }}>

@@ -19,9 +19,20 @@ export const metadata = {
   description: "This app helps people come together and have meaningful conversations.",
 };
 
+const themeInitScript = `
+try {
+  var t = localStorage.getItem("convoia-theme");
+  if (!t || !["light", "light-saturated", "dark", "dark-neon"].includes(t)) t = "light";
+  document.documentElement.setAttribute("data-theme", t);
+} catch (e) {}
+`;
+
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

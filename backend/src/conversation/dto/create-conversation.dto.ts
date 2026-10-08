@@ -1,9 +1,5 @@
 import { IsEnum, IsArray, IsNumber, IsOptional, IsString, MaxLength, ArrayMinSize, ArrayMaxSize } from 'class-validator';
-
-export enum ConversationType {
-  DM = 'DM',
-  GROUP = 'GROUP',
-}
+import { ConversationType } from '../entity/conversation.entity';
 
 export class CreateConversationDto {
   @IsEnum(ConversationType)
