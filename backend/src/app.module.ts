@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
@@ -9,7 +10,7 @@ import { RequestModule } from './request/request.module';
 import * as dotenv from 'dotenv';
 import { NotificationModule } from './notification/notification.module';
 import { ConversationModule } from './conversation/conversation.module';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 dotenv.config();
 @Module({
@@ -32,6 +33,9 @@ dotenv.config();
     ConversationModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
