@@ -1,98 +1,97 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { MessageCircle, Search, Send, User } from "lucide-react";
+import { toast } from "react-toastify";
 import { useConversations } from "@/hooks/useConversations";
 import { useMessages } from "@/hooks/useMessages";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import { useMe } from "@/hooks/useMe";
+import { useAccessToken } from "@/hooks/useAccessToken";
 import { getChatSocket } from "@/lib/socket";
-import { toast } from "react-toastify";
-import {
-  MessageCircle,
-  Search,
-  Send,
-  User,
-} from "lucide-react";
-export const dynamic = "force-dynamic";
+import { apiRequest } from "@/lib/api";
 
 function getDisplayName(conversation) {
-  if (conversation.type === "GROUP" && conversation.name) {
-    return conversation.name;
-  }
-  const other = conversation.participants?.[0];
-  return other?.name ?? "Unknown";
+  if (conversation.type === "GROUP" && conversation.name) return conversation.name;
+  return conversation.participants?.[0]?.name ?? "Unknown";
 }
 
 function getDisplayUsername(conversation) {
   if (conversation.type === "GROUP") return null;
-  const other = conversation.participants?.[0];
-  return other?.username ? `@${other.username}` : null;
+  const username = conversation.participants?.[0]?.username;
+  return username ? `@${username}` : null;
 }
 
 function getDisplayAvatar(conversation) {
   if (conversation.type === "GROUP") return null;
-  const other = conversation.participants?.[0];
-  return other?.avatar ?? null;
+  return conversation.participants?.[0]?.avatar ?? null;
+}
+
+function newClientMsgId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 export default function ChatClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const token = useAccessToken();
   const { data: me } = useMe();
   const { data: convData, isPending: loadingList, isError: listError } = useConversations();
-  const [selectedId, setSelectedId] = useState(() => {
-    const c = searchParams.get("c");
-    return c ? parseInt(c, 10) : null;
-  });
-  const [search, setSearch] = useState("");
-  const [messageText, setMessageText] = useState("");
 
-  useEffect(() => {
-    const c = searchParams.get("c");
-    const id = c ? parseInt(c, 10) : null;
-    if (id != null) setSelectedId(id);
+  // Selection lives in the URL, so no state/effect is needed to keep it in sync.
+  const selectedId = useMemo(() => {
+    const raw = searchParams.get("c");
+    const id = raw ? parseInt(raw, 10) : NaN;
+    return Number.isInteger(id) ? id : null;
   }, [searchParams]);
 
+  const [search, setSearch] = useState("");
+  const [messageText, setMessageText] = useState("");
+  const lastReportedRead = useRef(0);
+
   const handleSelectConversation = (id) => {
-    setSelectedId(id);
-    const url = id != null ? `/chat?c=${id}` : "/chat";
-    router.replace(url, { scroll: false });
+    router.replace(id != null ? `/chat?c=${id}` : "/chat", { scroll: false });
   };
 
-  /** Real-time: join chat room when a conversation is selected; listen for new_message */
+  // Realtime: the server auto-joins every conversation room on connect, so we
+  // only need to listen. Re-subscribe whenever a fresh access token arrives.
   useEffect(() => {
-    if (!me?.id || !selectedId) return;
-
+    if (!token) return;
     const socket = getChatSocket();
     if (!socket) return;
 
-    socket.emit("join_conversation", { conversationId: selectedId });
-
-    const onNewMessage = () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", selectedId] });
+    const resync = () => {
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
     };
 
-    socket.on("new_message", onNewMessage);
+    socket.on("new_message", resync);
+    socket.on("conversation:updated", resync);
+    socket.on("connected", resync);
+    socket.io.on("reconnect", resync);
 
     return () => {
-      socket.off("new_message", onNewMessage);
-      socket.emit("leave_conversation", { conversationId: selectedId });
+      socket.off("new_message", resync);
+      socket.off("conversation:updated", resync);
+      socket.off("connected", resync);
+      socket.io.off("reconnect", resync);
     };
-  }, [me?.id, selectedId, queryClient]);
+  }, [token, queryClient]);
 
-  const conversations = convData?.conversations ?? [];
+  const conversations = useMemo(() => convData?.conversations ?? [], [convData]);
+
   const filteredConversations = useMemo(() => {
     if (!search.trim()) return conversations;
     const q = search.toLowerCase();
-    return conversations.filter((c) => {
-      const name = getDisplayName(c).toLowerCase();
-      const preview = (c.lastMessagePreview ?? "").toLowerCase();
-      return name.includes(q) || preview.includes(q);
-    });
+    return conversations.filter(
+      (c) =>
+        getDisplayName(c).toLowerCase().includes(q) ||
+        (c.lastMessagePreview ?? "").toLowerCase().includes(q),
+    );
   }, [conversations, search]);
 
   const selected = useMemo(
@@ -100,86 +99,102 @@ export default function ChatClient() {
     [conversations, selectedId],
   );
 
-  /** Check if users are still friends (for DM conversations) */
-  const canSendMessages = selected?.type !== 'DM' || selected?.stillFriends !== false;
+  const canSendMessages = selected?.type !== "DM" || selected?.stillFriends !== false;
 
   const { data: messagesData, isPending: loadingMessages } = useMessages(selectedId);
-  const rawMessages = messagesData?.messages ?? [];
-  /** Show oldest at top, newest at bottom (reverse of API order) */
-  const messages = useMemo(() => [...rawMessages].reverse(), [rawMessages]);
+  const messages = useMemo(
+    () => [...(messagesData?.messages ?? [])].reverse(),
+    [messagesData],
+  );
   const sendMessage = useSendMessage(selectedId);
 
-  const handleSend = async () => {
+  // Mark the conversation read up to the newest message we have.
+  useEffect(() => {
+    if (!selectedId || !messagesData?.messages?.length) return;
+    const maxSeq = Math.max(...messagesData.messages.map((m) => m.seq ?? 0));
+    if (!maxSeq || maxSeq <= lastReportedRead.current) return;
+    lastReportedRead.current = maxSeq;
+    apiRequest({
+      url: `/conversations/${selectedId}/read`,
+      method: "POST",
+      data: { lastReadSeq: maxSeq },
+    })
+      .then(() => queryClient.invalidateQueries({ queryKey: ["conversations"] }))
+      .catch(() => {});
+  }, [selectedId, messagesData, queryClient]);
+
+  const handleSend = () => {
     const text = messageText.trim();
-    if (!text || !selectedId || !canSendMessages) return;
-    sendMessage.mutate(text, {
-      onSuccess: () => setMessageText(""),
-      onError: (error) => {
-        const message = error?.response?.data?.message || error?.message || "Failed to send message";
-        if (message.includes("unfriended") || message.includes("Cannot send messages")) {
-          toast.error("Cannot send messages to unfriended users");
-        } else {
-          toast.error(message);
-        }
+    // Guard against double-submit (Enter twice, click + Enter).
+    if (!text || !selectedId || !canSendMessages || sendMessage.isPending) return;
+    const clientMsgId = newClientMsgId();
+    setMessageText("");
+    sendMessage.mutate(
+      { content: text, clientMsgId },
+      {
+        onError: (error) => {
+          setMessageText(text);
+          toast.error(
+            error?.response?.data?.message || error?.message || "Failed to send message",
+          );
+        },
       },
-    });
+    );
   };
 
   if (loadingList) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <p className="text-gray-500">Loading conversations...</p>
+      <div className="flex h-full items-center justify-center bg-background text-t-muted">
+        Loading conversations…
       </div>
     );
   }
 
   if (listError) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <p className="text-red-500">Failed to load conversations</p>
+      <div className="flex h-full items-center justify-center bg-background text-red-500">
+        Failed to load conversations
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-0px)] w-full bg-white dark:bg-zinc-950">
-      {/* Left: Conversation list — 30% */}
-      <div className="flex w-[30%] min-w-[280px] max-w-[400px] flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="flex h-full w-full bg-background">
+      <div className="flex w-[30%] min-w-[280px] max-w-[400px] flex-col border-r border-t-border bg-t-surface">
+        <div className="border-b border-t-border p-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-t-primary text-white">
               <MessageCircle size={20} />
             </div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-              Messages
-            </h2>
+            <h2 className="text-xl font-bold text-foreground">Messages</h2>
           </div>
         </div>
         <div className="p-3">
           <div className="relative">
             <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t-muted"
               size={18}
+              aria-hidden="true"
             />
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Search conversations…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-zinc-100 py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-zinc-500 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:placeholder:text-zinc-400"
+              aria-label="Search conversations"
+              className="w-full rounded-lg border border-t-border bg-background py-2.5 pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-t-muted focus:border-t-primary focus:ring-1 focus:ring-t-primary"
             />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {filteredConversations.length === 0 ? (
-            <p className="p-4 text-center text-sm text-zinc-500">
+            <p className="p-4 text-center text-sm text-t-muted">
               No conversations yet. Start a chat from Friends.
             </p>
           ) : (
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <ul className="divide-y divide-t-border">
               {filteredConversations.map((conv) => {
                 const isSelected = conv.id === selectedId;
-                const displayName = getDisplayName(conv);
                 const avatar = getDisplayAvatar(conv);
                 return (
                   <li key={conv.id}>
@@ -187,27 +202,29 @@ export default function ChatClient() {
                       type="button"
                       onClick={() => handleSelectConversation(conv.id)}
                       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
-                        isSelected
-                          ? "bg-blue-50 dark:bg-blue-950/30"
-                          : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        isSelected ? "bg-t-hover" : "hover:bg-t-hover"
                       }`}
                     >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-t-hover text-t-muted">
                         {avatar ? (
-                          <img
-                            src={avatar}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatar} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <User size={22} />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-zinc-900 dark:text-white">
-                          {displayName}
-                        </p>
-                        <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate font-semibold text-foreground">
+                            {getDisplayName(conv)}
+                          </p>
+                          {conv.unreadCount > 0 && (
+                            <span className="shrink-0 rounded-full bg-t-primary px-2 py-0.5 text-xs font-semibold text-white">
+                              {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-sm text-t-muted">
                           {conv.lastMessagePreview || "No messages yet"}
                         </p>
                       </div>
@@ -220,47 +237,37 @@ export default function ChatClient() {
         </div>
       </div>
 
-      {/* Right: Active conversation — 70% */}
-      <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
+      <div className="flex flex-1 flex-col bg-background">
         {!selected ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-zinc-500 dark:text-zinc-400">
+          <div className="flex flex-1 flex-col items-center justify-center text-t-muted">
             <MessageCircle size={48} className="mb-4 opacity-50" />
             <p className="text-lg font-medium">No conversation selected</p>
             <p className="text-sm">Choose a chat from the list or start one from Friends.</p>
           </div>
         ) : (
           <>
-            {/* Chat header */}
-            <div className="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+            <div className="flex items-center gap-3 border-b border-t-border bg-t-surface px-4 py-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-t-hover text-t-muted">
                 {getDisplayAvatar(selected) ? (
-                  <img
-                    src={getDisplayAvatar(selected)}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={getDisplayAvatar(selected)} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <User size={22} />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-zinc-900 dark:text-white">
-                  {getDisplayName(selected)}
-                </p>
+                <p className="font-semibold text-foreground">{getDisplayName(selected)}</p>
                 {getDisplayUsername(selected) && (
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {getDisplayUsername(selected)}
-                  </p>
+                  <p className="text-sm text-t-muted">{getDisplayUsername(selected)}</p>
                 )}
               </div>
             </div>
 
-            {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4" aria-live="polite">
               {loadingMessages ? (
-                <p className="text-center text-sm text-zinc-500">Loading messages...</p>
+                <p className="text-center text-sm text-t-muted">Loading messages…</p>
               ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400">
+                <div className="flex flex-col items-center justify-center py-12 text-t-muted">
                   <p className="text-lg font-medium">No messages yet</p>
                   <p className="text-sm">Start the conversation!</p>
                 </div>
@@ -269,20 +276,15 @@ export default function ChatClient() {
                   {messages.map((msg) => {
                     const isMe = msg.senderId === me?.id;
                     return (
-                      <li
-                        key={msg.id}
-                        className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-                      >
+                      <li key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                         <div
                           className={`max-w-[75%] rounded-2xl px-4 py-2 ${
                             isMe
-                              ? "bg-blue-600 text-white"
-                              : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm border border-zinc-200 dark:border-zinc-700"
+                              ? "bg-t-primary text-white"
+                              : "border border-t-border bg-t-surface text-foreground"
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap wrap-break-word">
-                            {msg.content}
-                          </p>
+                          <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
                         </div>
                       </li>
                     );
@@ -291,35 +293,36 @@ export default function ChatClient() {
               )}
             </div>
 
-            {/* Input area */}
-            <div className="border-t border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="border-t border-t-border bg-t-surface p-4">
               {!canSendMessages && (
-                <div className="mb-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-3 py-2">
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                    You are no longer friends with this user. You can view messages but cannot send new ones.
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    You are no longer friends with this user. You can view messages but cannot
+                    send new ones.
                   </p>
                 </div>
               )}
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder={canSendMessages ? "Type a message" : "Cannot send messages to unfriended users"}
+                  placeholder={canSendMessages ? "Type a message" : "Cannot send messages"}
                   value={messageText}
                   onChange={(e) => canSendMessages && setMessageText(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && canSendMessages) {
+                    if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
                     }
                   }}
                   disabled={!canSendMessages}
-                  className="flex-1 rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:placeholder:text-zinc-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Message"
+                  className="flex-1 rounded-xl border border-t-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-t-muted focus:border-t-primary focus:ring-1 focus:ring-t-primary disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={handleSend}
                   disabled={!messageText.trim() || sendMessage.isPending || !canSendMessages}
-                  className="flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-3 text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-xl bg-t-primary px-4 py-3 text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Send size={18} />
                   Send

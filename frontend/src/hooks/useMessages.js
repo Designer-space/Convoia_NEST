@@ -1,28 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 
-export function useMessages(conversationId) {
-  const [hasToken, setHasToken] = useState(false);
+const AUTH_PAGES = ["/login", "/register"];
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setHasToken(!!localStorage.getItem("token"));
-    }
-  }, []);
+export function useMessages(conversationId) {
+  const pathname = usePathname();
+  const enabled = !AUTH_PAGES.includes(pathname) && !!conversationId;
 
   return useQuery({
     queryKey: ["messages", conversationId],
-    queryFn: async () => {
-      const data = await apiRequest({
+    queryFn: () =>
+      apiRequest({
         url: `/conversations/${conversationId}/messages`,
         method: "GET",
         params: { limit: 50 },
-      });
-      return data;
-    },
-    enabled: hasToken && !!conversationId,
+      }),
+    enabled,
   });
 }

@@ -1,11 +1,14 @@
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import type { Request } from 'express';
 import cloudinary from './cloudinary.config';
+
+type RequestWithUser = Request & { user?: { userId?: number; id?: number } };
 
 export const avatarStorage = new CloudinaryStorage({
   cloudinary,
-  params: async (req: any, file) => {
-    // Support both JWT payload (userId) and entity (id) shapes on req.user
-    const authUser = req?.user as any;
+  params: (req: Request) => {
+    // Support both JWT payload (userId) and entity (id) shapes on req.user.
+    const authUser = (req as RequestWithUser).user;
     const userId = authUser?.userId ?? authUser?.id;
     const publicId = userId
       ? `avatars/user-${userId}-avatar`
@@ -18,9 +21,7 @@ export const avatarStorage = new CloudinaryStorage({
       overwrite: true,
       invalidate: true,
       unique_filename: false,
-      transformation: [
-        { width: 300, height: 300, crop: 'fill' },
-      ],
+      transformation: [{ width: 300, height: 300, crop: 'fill' }],
     };
   },
 });

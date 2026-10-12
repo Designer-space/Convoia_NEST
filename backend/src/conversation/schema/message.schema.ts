@@ -13,12 +13,6 @@ export interface IMessageAttachment {
   size?: number;
 }
 
-/** Read receipt entry - future ready */
-export interface IReadReceipt {
-  userId: number;
-  readAt: Date;
-}
-
 @Schema({ timestamps: true, collection: 'messages' })
 export class Message extends Document {
   @Prop({ required: true, index: true })
@@ -26,6 +20,14 @@ export class Message extends Document {
 
   @Prop({ required: true, index: true })
   senderId: number;
+
+  /** Monotonic, per-conversation ordering key. */
+  @Prop({ required: true })
+  seq: number;
+
+  /** Client-generated idempotency key so retries don't duplicate messages. */
+  @Prop({ type: String, default: null })
+  clientMsgId: string | null;
 
   @Prop({ required: true, default: 'TEXT' })
   type: MessageType;
@@ -36,10 +38,6 @@ export class Message extends Document {
   /** Future: media/file URLs (e.g. Cloudinary) */
   @Prop({ type: [Object], default: [] })
   attachments: IMessageAttachment[];
-
-  /** Future: read receipts - who read and when */
-  @Prop({ type: [Object], default: [] })
-  readBy: IReadReceipt[];
 
   /** Optional: reply reference */
   @Prop({ type: String, default: null })
@@ -57,4 +55,13 @@ export class Message extends Document {
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
 
-MessageSchema.index({ conversationId: 1, createdAt: -1 });
+// Primary pagination index: newest-first within a conversation by seq.
+MessageSchema.index({ conversationId: 1, seq: -1 });
+// Idempotency: a sender cannot store two messages with the same client id.
+MessageSchema.index(
+  { conversationId: 1, senderId: 1, clientMsgId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { clientMsgId: { $type: 'string' } },
+  },
+);

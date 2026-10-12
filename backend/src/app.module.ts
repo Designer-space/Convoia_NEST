@@ -7,35 +7,42 @@ import { AuthModule } from './auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RequestModule } from './request/request.module';
-import * as dotenv from 'dotenv';
 import { NotificationModule } from './notification/notification.module';
 import { ConversationModule } from './conversation/conversation.module';
+import { HealthModule } from './health/health.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { entities } from './database/data-source';
+import { getEnv } from './config/env';
 
-dotenv.config();
+const env = getEnv();
+
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      url: process.env.PGADMIN_URI,
-      autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV === 'development',
+      url: env.PGADMIN_URI,
+      entities,
+      // Schema is owned by migrations. Never let the app mutate it implicitly.
+      synchronize: false,
+      migrationsRun: false,
+      ssl: { rejectUnauthorized: false },
+      retryAttempts: 3,
     }),
-    MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/chat'),
+    MongooseModule.forRoot(env.MONGO_URI),
     UserModule,
     AuthModule,
     RequestModule,
     NotificationModule,
     ConversationModule,
+    HealthModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
-  ],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

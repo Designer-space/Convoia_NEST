@@ -22,25 +22,31 @@ export const metadata = {
 const themeInitScript = `
 try {
   var t = localStorage.getItem("convoia-theme");
-  if (!t || !["light", "light-saturated", "dark", "dark-neon"].includes(t)) t = "light";
+  if (!t || ["light", "light-saturated", "dark", "dark-neon"].indexOf(t) === -1) {
+    t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
   document.documentElement.setAttribute("data-theme", t);
 } catch (e) {}
 `;
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" data-theme="light">
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <QueryProvider>
           <ThemeProvider>
-            <div className="flex h-screen bg-gray-50">
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-t-primary focus:px-4 focus:py-2 focus:text-white"
+            >
+              Skip to content
+            </a>
+            <div className="flex h-screen bg-background">
               <Sidebar />
-              <main className="flex-1 overflow-y-auto">
+              <main id="main-content" className="flex-1 overflow-y-auto">
                 {children}
               </main>
             </div>

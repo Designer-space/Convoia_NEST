@@ -1,24 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 
-export function useConversations() {
-  const [hasToken, setHasToken] = useState(false);
+const AUTH_PAGES = ["/login", "/register"];
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setHasToken(!!localStorage.getItem("token"));
-    }
-  }, []);
+export function useConversations() {
+  const pathname = usePathname();
+  const enabled = !AUTH_PAGES.includes(pathname);
 
   return useQuery({
     queryKey: ["conversations"],
-    queryFn: async () => {
-      const data = await apiRequest({ url: "/conversations", method: "GET" });
-      return data;
-    },
-    enabled: hasToken,
+    queryFn: () => apiRequest({ url: "/conversations", method: "GET" }),
+    enabled,
   });
 }

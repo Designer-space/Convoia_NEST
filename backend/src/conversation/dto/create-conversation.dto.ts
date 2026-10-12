@@ -1,4 +1,13 @@
-import { IsEnum, IsArray, IsNumber, IsOptional, IsString, MaxLength, ArrayMinSize, ArrayMaxSize } from 'class-validator';
+import {
+  IsEnum,
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ArrayMinSize,
+  ArrayMaxSize,
+} from 'class-validator';
 import { ConversationType } from '../entity/conversation.entity';
 
 export class CreateConversationDto {
@@ -8,7 +17,7 @@ export class CreateConversationDto {
   @IsArray()
   @IsNumber({}, { each: true })
   @ArrayMinSize(1)
-  @ArrayMaxSize(50)
+  @ArrayMaxSize(255)
   participantIds: number[];
 
   @IsOptional()

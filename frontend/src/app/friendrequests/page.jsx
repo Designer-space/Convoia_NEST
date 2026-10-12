@@ -1,68 +1,55 @@
-"use client";
-import { useRespondFriendRequest } from '@/hooks/useRespondFriendRequest';
+'use client';
+
 import { useQuery } from '@tanstack/react-query';
-import React from 'react'
+import { useRespondFriendRequest } from '@/hooks/useRespondFriendRequest';
+import { apiRequest } from '@/lib/api';
 import Skeleton from '../components/Skeleton';
 import { UserProfile } from '../components/UserProfile';
-import { apiRequest } from '@/lib/api';
 
-const page = () => {
-  const { mutate: respondRequest, isPending: responding } =
-    useRespondFriendRequest();
+export default function FriendRequestsPage() {
+  const { mutate: respondRequest, isPending: responding } = useRespondFriendRequest();
 
   const { data, isPending, isError } = useQuery({
-    queryKey: ["friendRequests"],
-    queryFn: async () =>
-      await apiRequest({ url: "/friends/requests", method: "GET" }),
+    queryKey: ['friendRequests'],
+    queryFn: () => apiRequest({ url: '/friends/requests', method: 'GET' }),
   });
 
-  // if (isPending) return <Skeleton />;
-  if (isError) return <p>Something went wrong</p>;
+  if (isError) return <p className="p-8 text-center text-red-500">Something went wrong</p>;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <div className="w-full space-y-8">
-          <h1 className="text-2xl font-bold mb-4">Friend Requests</h1>
+    <div className="mx-auto max-w-3xl p-8">
+      <h1 className="mb-6 text-2xl font-bold text-foreground">Friend Requests</h1>
 
-          {data?.requests?.length === 0 && (
-            <p className="text-gray-500">No pending friend requests</p>
-          )}
-
-          {
-            isPending ? (<Skeleton />) : (
-              data?.requests?.map((req) => (
-                <UserProfile
-                  key={req.id}
-                  name={req.sender.name}
-                  avatar={req.sender.avatar}
-                  actions={[
-                    {
-                      label: responding ? "Accepting..." : "Accept",
-                      onClick: () =>
-                        respondRequest({
-                          requestId: req.id,
-                          action: "ACCEPTED",
-                        }),
-                      disabled: responding,
-                    },
-                    {
-                      label: "Reject",
-                      variant: "danger",
-                      onClick: () =>
-                        respondRequest({
-                          requestId: req.id,
-                          action: "REJECTED",
-                        }),
-                      disabled: responding,
-                    },
-                  ]}
-                />
-              )))
-          }
+      {isPending ? (
+        <Skeleton />
+      ) : data?.requests?.length ? (
+        <div className="space-y-6">
+          {data.requests.map((req) => (
+            <UserProfile
+              key={req.id}
+              name={req.sender.name}
+              avatar={req.sender.avatar}
+              actions={[
+                {
+                  label: responding ? 'Accepting…' : 'Accept',
+                  onClick: () =>
+                    respondRequest({ requestId: req.id, action: 'ACCEPTED' }),
+                  disabled: responding,
+                },
+                {
+                  label: 'Reject',
+                  variant: 'danger',
+                  onClick: () =>
+                    respondRequest({ requestId: req.id, action: 'REJECTED' }),
+                  disabled: responding,
+                },
+              ]}
+            />
+          ))}
         </div>
-      </main>
+      ) : (
+        <p className="text-t-muted">No pending friend requests</p>
+      )}
     </div>
-  )
+  );
 }
-
-export default page

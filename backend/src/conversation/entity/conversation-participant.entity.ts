@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  Index,
 } from 'typeorm';
 import { Conversation } from './conversation.entity';
 
@@ -22,12 +23,20 @@ export class ConversationParticipant {
   @JoinColumn({ name: 'conversationId' })
   conversation: Conversation;
 
+  @Index()
   @Column()
   userId: number;
 
   /** For future: admin, member, etc. */
   @Column({ type: 'varchar', length: 20, default: 'member' })
   role: string;
+
+  /**
+   * Highest conversation `seq` this participant has seen. Unread count is
+   * `conversation.lastSeq - lastReadSeq` — O(1) and duplicate-free.
+   */
+  @Column({ type: 'bigint', default: 0 })
+  lastReadSeq: string;
 
   /** For read receipts: last time this user read messages in this conversation */
   @Column({ type: 'timestamptz', nullable: true })

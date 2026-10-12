@@ -3,89 +3,80 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
-} from "@nestjs/websockets";
-import { Server, Socket } from "socket.io";
-import { JwtService } from "@nestjs/jwt";
-import { getJwtSecret } from 'src/config/env';
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
 
-@WebSocketGateway({
-  cors: { origin: "*" },
-})
+@WebSocketGateway({ cors: { origin: true, credentials: true } })
 export class NotificationGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
 
-  // userId -> set of socketIds
-  private onlineUsers = new Map<number, Set<string>>();
+  /** socketId -> userId, so we can clean up on disconnect. */
+  private socketUsers = new Map<string, number>();
 
-  constructor(private jwtService: JwtService) {}
+  constructor(private readonly jwtService: JwtService) {}
 
-  async handleConnection(client: Socket) {
-    try {
-      const token = this.extractToken(client);
-      if (!token) {
-        client.emit('error', { message: 'Authentication required' });
-        client.disconnect();
-        return;
-      }
-
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: getJwtSecret(),
-      });
-      const userId = payload.sub;
-      if (!userId) {
-        client.emit('error', { message: 'Invalid token payload' });
-        client.disconnect();
-        return;
-      }
-
-      client.data.user = { userId, email: payload.email };
-      const sockets = this.onlineUsers.get(userId) || new Set();
-      sockets.add(client.id);
-      this.onlineUsers.set(userId, sockets);
-    } catch (error) {
-      client.emit('error', { message: 'Invalid or expired token' });
-      client.disconnect();
-    }
+  private userRoom(userId: number): string {
+    return `user:${userId}`;
   }
 
   private extractToken(client: Socket): string | null {
-    // Try auth.token first (recommended), then query.token, then headers
-    const authToken = client.handshake.auth?.token;
-    if (authToken) return authToken;
+    const auth = client.handshake.auth as { token?: string } | undefined;
+    if (auth?.token) return auth.token;
 
     const queryToken = client.handshake.query?.token;
     if (queryToken && typeof queryToken === 'string') return queryToken;
 
     const authHeader = client.handshake.headers?.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      return authHeader.substring(7);
-    }
+    if (authHeader?.startsWith('Bearer ')) return authHeader.substring(7);
 
     return null;
   }
 
-  handleDisconnect(client: Socket) {
-    for (const [userId, sockets] of this.onlineUsers.entries()) {
-      if (sockets.has(client.id)) {
-        sockets.delete(client.id);
-        if (sockets.size === 0) {
-          this.onlineUsers.delete(userId);
-        }
-        break;
+  async handleConnection(client: Socket) {
+    try {
+      const token = this.extractToken(client);
+      if (!token) {
+        client.emit('error', {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        });
+        client.disconnect();
+        return;
       }
+
+      const payload = await this.jwtService.verifyAsync<{ sub: number }>(token);
+      const userId: number = payload.sub;
+      if (!userId) {
+        client.emit('error', {
+          code: 'UNAUTHORIZED',
+          message: 'Invalid token payload',
+        });
+        client.disconnect();
+        return;
+      }
+
+      (client.data as { user?: { userId: number } }).user = { userId };
+      this.socketUsers.set(client.id, userId);
+      // Reconnects re-join automatically, so notifications survive network blips.
+      await client.join(this.userRoom(userId));
+    } catch {
+      client.emit('error', {
+        code: 'UNAUTHORIZED',
+        message: 'Invalid or expired token',
+      });
+      client.disconnect();
     }
   }
 
-  sendToUser(userId: number, event: string, data: any) {
-    const sockets = this.onlineUsers.get(userId);
+  handleDisconnect(client: Socket) {
+    this.socketUsers.delete(client.id);
+  }
 
-    if (!sockets) return;
-
-    sockets.forEach((socketId) => {
-      this.server.to(socketId).emit(event, data);
-    });
+  sendToUser(userId: number, event: string, data: unknown) {
+    this.server.to(this.userRoom(userId)).emit(event, data);
   }
 }

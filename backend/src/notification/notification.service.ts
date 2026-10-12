@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { Notification } from "./entity/notification.entity";
-import { NotificationGateway } from "./notification.gateway";
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Notification } from './entity/notification.entity';
+import { NotificationGateway } from './notification.gateway';
 
 @Injectable()
 export class NotificationService {
@@ -12,20 +12,23 @@ export class NotificationService {
     private gateway: NotificationGateway,
   ) {}
 
-  async notify(userId: number | string, type: string, payload?: any) {
+  async notify(
+    userId: number | string,
+    type: string,
+    payload?: Record<string, unknown>,
+  ) {
     const numericUserId = Number(userId);
-  
+
     const notification = this.notificationRepo.create({
       userId: numericUserId,
       type,
       payload,
     });
-  
-    await this.notificationRepo.save(notification);
-  
-    this.gateway.sendToUser(numericUserId, "notification", notification);
-  
-    return notification;
-  } 
-}
 
+    await this.notificationRepo.save(notification);
+
+    this.gateway.sendToUser(numericUserId, 'notification', notification);
+
+    return notification;
+  }
+}

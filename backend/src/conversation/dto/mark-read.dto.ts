@@ -1,9 +1,11 @@
-import { IsArray, IsOptional, IsString, ArrayMaxSize } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsOptional, Min } from 'class-validator';
 
 export class MarkReadDto {
+  /** Highest conversation seq the client has seen. Omitted => read to head. */
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  @ArrayMaxSize(100)
-  messageIds?: string[];
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  lastReadSeq?: number;
 }

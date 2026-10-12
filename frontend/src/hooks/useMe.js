@@ -1,18 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 
-export function useMe() {
-  const [hasToken, setHasToken] = useState(false);
+const AUTH_PAGES = ["/login", "/register"];
 
-  // Check for token only on client side to avoid hydration mismatch
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setHasToken(!!localStorage.getItem("token"));
-    }
-  }, []);
+export function useMe() {
+  const pathname = usePathname();
+  const enabled = !AUTH_PAGES.includes(pathname);
 
   return useQuery({
     queryKey: ["me"],
@@ -20,6 +16,7 @@ export function useMe() {
       const data = await apiRequest({ url: "/user/myprofile" });
       return data.user;
     },
-    enabled: hasToken,
+    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }

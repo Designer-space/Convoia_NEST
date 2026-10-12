@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { ConversationParticipant } from './conversation-participant.entity';
 
@@ -23,6 +24,18 @@ export class Conversation {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   name: string | null;
+
+  /**
+   * Deterministic key for DMs: `min(userIdA, userIdB)-max(userIdA, userIdB)`.
+   * A unique index here makes concurrent DM creation idempotent. Null for groups.
+   */
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  dmKey: string | null;
+
+  /** Monotonic per-conversation message sequence (drives ordering + unread). */
+  @Column({ type: 'bigint', default: 0 })
+  lastSeq: string;
 
   @OneToMany(() => ConversationParticipant, (p) => p.conversation)
   participants: ConversationParticipant[];

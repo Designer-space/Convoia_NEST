@@ -1,62 +1,57 @@
 "use client";
+
 import { useEffect } from "react";
-import { getSocket } from "@/lib/socket";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMe } from "@/hooks/useMe";
 import { toast } from "react-toastify";
+import { getSocket } from "@/lib/socket";
+import { useAccessToken } from "@/hooks/useAccessToken";
 
 export default function useNotifications() {
-  const { data: user } = useMe();
+  const token = useAccessToken();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!token) return;
 
     const socket = getSocket();
     if (!socket) return;
 
     const handleNotification = (data) => {
-      console.log("🔔 New notification:", data);
-
-      // 🔔 Toast handling (UX only)
-      switch (data.type) {
+      switch (data?.type) {
         case "FRIEND_REQUEST_SENT":
-          toast.info(
-            `👋 ${data.payload.senderName ?? "Someone"} sent you a friend request`
-          );
+          toast.info(`👋 ${data.payload?.senderName ?? "Someone"} sent you a friend request`);
           break;
-
         case "FRIEND_REQUEST_ACCEPTED":
           toast.success(
-            `🎉 ${data.payload.receiverName ?? "Someone"} accepted your friend request`
+            `🎉 ${data.payload?.receiverName ?? "Someone"} accepted your friend request`,
           );
           break;
-
         case "FRIEND_REQUEST_REJECTED":
           toast.error(
-            `❌ ${data.payload.receiverName ?? "Someone"} rejected your friend request`
+            `❌ ${data.payload?.receiverName ?? "Someone"} rejected your friend request`,
           );
           break;
-
         default:
-          console.warn("Unhandled notification type:", data.type);
+          break;
       }
 
       queryClient.invalidateQueries({ queryKey: ["allUsers"] });
       queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
-      // queryClient.invalidateQueries({ queryKey: ["notifications"] });
     };
 
-    socket.off("notification");
-    socket.on("notification", handleNotification);
+    // Re-sync after a reconnect (room membership is rebuilt server-side).
+    const handleReconnect = () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    };
 
-    socket.on("error", (error) => {
-      console.error("Socket connection error:", error);
-    });
+    socket.off("notification", handleNotification);
+    socket.on("notification", handleNotification);
+    socket.io.off("reconnect", handleReconnect);
+    socket.io.on("reconnect", handleReconnect);
 
     return () => {
       socket.off("notification", handleNotification);
-      socket.off("error");
+      socket.io.off("reconnect", handleReconnect);
     };
-  }, [user?.id, queryClient]);
+  }, [token, queryClient]);
 }

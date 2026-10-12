@@ -13,7 +13,7 @@ export class WsJwtGuard implements CanActivate {
   constructor(private jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const client: Socket = context.switchToWs().getClient();
+    const client: Socket = context.switchToWs().getClient<Socket>();
     const token = this.extractTokenFromSocket(client);
 
     if (!token) {
@@ -21,27 +21,29 @@ export class WsJwtGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: getJwtSecret(),
-      });
-      // Attach user info to socket data for later use
-      client.data.user = { userId: payload.sub, email: payload.email };
+      const payload = await this.jwtService.verifyAsync<{
+        sub: number;
+        email: string;
+      }>(token, { secret: getJwtSecret() });
+      (client.data as { user?: unknown }).user = {
+        userId: payload.sub,
+        email: payload.email,
+      };
       return true;
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid token');
     }
   }
 
   private extractTokenFromSocket(client: Socket): string | null {
-    // Try auth.token first (recommended), then query.token, then headers
-    const authToken = client.handshake.auth?.token;
-    if (authToken) return authToken;
+    const auth = client.handshake.auth as { token?: string } | undefined;
+    if (auth?.token) return auth.token;
 
     const queryToken = client.handshake.query?.token;
     if (queryToken && typeof queryToken === 'string') return queryToken;
 
     const authHeader = client.handshake.headers?.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
 

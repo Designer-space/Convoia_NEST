@@ -1,7 +1,29 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsIn, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  MinLength,
+  MaxLength,
+  IsIn,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+  IsObject,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
+export class ProfilePrivacyDto {
+  @IsOptional()
+  @IsBoolean()
+  showEmailToFriends?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showPhoneToFriends?: boolean;
+}
+
 export class UpdateProfileDto {
+  /** Any language: accents, apostrophes and non-Latin scripts are allowed. */
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -29,4 +51,8 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(20)
   phoneNumber?: string;
+
+  @IsOptional()
+  @IsObject()
+  privacy?: ProfilePrivacyDto;
 }

@@ -1,50 +1,95 @@
-import { Controller, Delete, Get, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseIntPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { RequestService } from './request.service';
-import { JwtAuthGuard } from 'src/auth/guard/jwt.guard';
-import { NotificationService } from 'src/notification/notification.service';
+import { JwtAuthGuard } from '../auth/guard/jwt.guard';
+import type { AuthedRequest } from '../auth/types/authed-request';
 
 @Controller('friends')
 @UseGuards(JwtAuthGuard)
 export class RequestController {
-    constructor( private readonly friendRequestServices: RequestService, private readonly notificationService: NotificationService ) {}
+  constructor(private readonly friendRequestService: RequestService) {}
 
-    @Get('myfriends')
-    async getAllFriends(@Req() req: any) {
-        const userId = req.user.userId;
-        return this.friendRequestServices.getAllFriends(userId);
-    }
+  @Get('myfriends')
+  getAllFriends(@Req() req: AuthedRequest) {
+    return this.friendRequestService.getAllFriends(req.user.userId);
+  }
 
-    @Get("requests")
-    getAllFriendRequests(@Req() req:any){
-        return this.friendRequestServices.getAllFriendRequests(req.user.userId)
-    }
+  @Get('requests')
+  getAllFriendRequests(@Req() req: AuthedRequest) {
+    return this.friendRequestService.getAllFriendRequests(req.user.userId);
+  }
 
-    @Post("request/:receiverId")
-    sendFriendRequest(@Req() req: any, @Param('receiverId', ParseIntPipe) receiverId: number){
-        return this.friendRequestServices.sendFriendRequest(req.user.userId, receiverId)
-    }
+  @Get('requests/sent')
+  getAllSentRequests(@Req() req: AuthedRequest) {
+    return this.friendRequestService.getAllSentRequests(req.user.userId);
+  }
 
-    @Post("accept/:requestId")
-    acceptFriendRequest(@Req() req:any, @Param('requestId', ParseIntPipe) requestId: number){
-        return this.friendRequestServices.acceptFriendRequest(req.user.userId, requestId)
-    }
+  @Post('request/:receiverId')
+  sendFriendRequest(
+    @Req() req: AuthedRequest,
+    @Param('receiverId', ParseIntPipe) receiverId: number,
+  ) {
+    return this.friendRequestService.sendFriendRequest(
+      req.user.userId,
+      receiverId,
+    );
+  }
 
-    @Post("reject/:requestId")
-    rejectFriendRequest(@Req() req:any, @Param('requestId', ParseIntPipe) requestId: number){
-        return this.friendRequestServices.rejectFriendRequest(req.user.userId, requestId)
-    }
+  @Post('accept/:requestId')
+  @HttpCode(200)
+  acceptFriendRequest(
+    @Req() req: AuthedRequest,
+    @Param('requestId', ParseIntPipe) requestId: number,
+  ) {
+    return this.friendRequestService.acceptFriendRequest(
+      req.user.userId,
+      requestId,
+    );
+  }
 
-    @Get("nonfriends")
-    getAllNonAcceptedUser(@Req() req:any){
-        return this.friendRequestServices.getAllNonAcceptedUser(req.user.userId)
-    }
+  @Post('reject/:requestId')
+  @HttpCode(200)
+  rejectFriendRequest(
+    @Req() req: AuthedRequest,
+    @Param('requestId', ParseIntPipe) requestId: number,
+  ) {
+    return this.friendRequestService.rejectFriendRequest(
+      req.user.userId,
+      requestId,
+    );
+  }
 
-    @Delete(':friendId')
-    async unfriend(
-      @Param('friendId', ParseIntPipe) friendId: number,
-      @Req() req: any,
-    ) {
-      return this.friendRequestServices.unfriend(req.user.userId, friendId);
-    }
+  @Post('cancel/:requestId')
+  @HttpCode(200)
+  cancelFriendRequest(
+    @Req() req: AuthedRequest,
+    @Param('requestId', ParseIntPipe) requestId: number,
+  ) {
+    return this.friendRequestService.cancelFriendRequest(
+      req.user.userId,
+      requestId,
+    );
+  }
 
+  @Get('nonfriends')
+  getAllNonAcceptedUser(@Req() req: AuthedRequest) {
+    return this.friendRequestService.getAllNonAcceptedUser(req.user.userId);
+  }
+
+  @Delete(':friendId')
+  unfriend(
+    @Param('friendId', ParseIntPipe) friendId: number,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.friendRequestService.unfriend(req.user.userId, friendId);
+  }
 }

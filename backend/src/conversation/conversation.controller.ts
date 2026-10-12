@@ -15,6 +15,7 @@ import { MessageService } from './message.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MarkReadDto } from './dto/mark-read.dto';
+import type { AuthedRequest } from '../auth/types/authed-request';
 
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
@@ -25,24 +26,24 @@ export class ConversationController {
   ) {}
 
   @Get()
-  async getConversations(@Req() req: any) {
-    const userId = req.user.userId;
-    return this.conversationService.getConversationsForUser(userId);
+  getConversations(@Req() req: AuthedRequest) {
+    return this.conversationService.getConversationsForUser(req.user.userId);
   }
 
   @Post()
   async createConversation(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Body() body: CreateConversationDto,
   ) {
-    const userId = req.user.userId;
-    const conversation = await this.conversationService.createConversation(userId, {
-      type: body.type,
-      participantIds: body.participantIds,
-      name: body.name,
-    });
+    const conversation = await this.conversationService.createConversation(
+      req.user.userId,
+      {
+        type: body.type,
+        participantIds: body.participantIds,
+        name: body.name,
+      },
+    );
     return {
-      message: 'Conversation created successfully',
       conversation: {
         id: conversation.id,
         type: conversation.type,
@@ -54,13 +55,14 @@ export class ConversationController {
 
   @Get(':id')
   async getConversation(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const userId = req.user.userId;
-    const conversation = await this.conversationService.getConversationById(id, userId);
+    const conversation = await this.conversationService.getConversationById(
+      id,
+      req.user.userId,
+    );
     return {
-      message: 'Conversation fetched successfully',
       conversation: {
         id: conversation.id,
         type: conversation.type,
@@ -68,6 +70,7 @@ export class ConversationController {
         lastMessageId: conversation.lastMessageId,
         lastMessageAt: conversation.lastMessageAt,
         lastMessagePreview: conversation.lastMessagePreview,
+        lastSeq: Number(conversation.lastSeq),
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
       },
@@ -75,42 +78,49 @@ export class ConversationController {
   }
 
   @Get(':id/messages')
-  async getMessages(
-    @Req() req: any,
+  getMessages(
+    @Req() req: AuthedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Query('limit') limit?: string,
     @Query('before') before?: string,
+    @Query('after') after?: string,
   ) {
-    const userId = req.user.userId;
-    const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10) || 50) ) : 50;
-    return this.messageService.getMessages(id, userId, limitNum, before);
+    const limitNum = limit
+      ? Math.min(100, Math.max(1, parseInt(limit, 10) || 50))
+      : 50;
+    return this.messageService.getMessages(
+      id,
+      req.user.userId,
+      limitNum,
+      before,
+      after,
+    );
   }
 
   @Post(':id/messages')
   async sendMessage(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: SendMessageDto,
   ) {
-    const userId = req.user.userId;
-    const message = await this.messageService.sendMessage(id, userId, {
+    const message = await this.messageService.sendMessage(id, req.user.userId, {
       content: body.content ?? null,
       replyToMessageId: body.replyToMessageId ?? null,
+      clientMsgId: body.clientMsgId ?? null,
     });
-    return {
-      message: 'Message sent successfully',
-      data: message,
-    };
+    return { data: message };
   }
 
   @Post(':id/read')
   async markAsRead(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: MarkReadDto,
   ) {
-    const userId = req.user.userId;
-    await this.messageService.markAsRead(id, userId, body.messageIds);
-    return { message: 'Marked as read' };
+    return this.messageService.markAsRead(
+      id,
+      req.user.userId,
+      body.lastReadSeq,
+    );
   }
 }

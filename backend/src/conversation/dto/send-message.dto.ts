@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MaxLength, IsUUID } from 'class-validator';
 
 export class SendMessageDto {
   @IsOptional()
@@ -10,4 +10,9 @@ export class SendMessageDto {
   @IsString()
   @MaxLength(50)
   replyToMessageId?: string | null;
+
+  /** Client-generated idempotency key so retries don't duplicate messages. */
+  @IsOptional()
+  @IsUUID()
+  clientMsgId?: string;
 }

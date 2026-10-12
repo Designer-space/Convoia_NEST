@@ -1,55 +1,49 @@
-'use client'
+'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { useSendFriendRequest } from '@/hooks/useSendFriendRequest';
 import { apiRequest } from '@/lib/api';
 import { UserProfile } from '../components/UserProfile';
 import Skeleton from '../components/Skeleton';
-import { useQuery } from '@tanstack/react-query';
 
-const page = () => {
+export default function AddFriendPage() {
+  const { mutate: sendRequest, isPending: sending } = useSendFriendRequest();
 
-    const { mutate: sendRequest, isPending } = useSendFriendRequest();
+  const { data, isPending } = useQuery({
+    queryKey: ['allUsers'],
+    queryFn: () => apiRequest({ url: '/friends/nonfriends', method: 'GET' }),
+  });
 
-    const { data, isPending: isPendingNonFriend } = useQuery({
-        queryKey: ["allUsers"],
-        queryFn: () =>
-            apiRequest({ url: "/friends/nonfriends", method: "GET" }),
-    });
+  const users = data?.users ?? [];
 
-
-    const getActions = (user) => [
-        {
-            label: isPendingNonFriend ? "Sending..." : "Send Request",
-            onClick: () => sendRequest(user.id),
-            disabled: isPendingNonFriend,
-        },
-    ];
-
-    return (
-        <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-            <main className="flex w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-                <div className="w-full">
-                    <h1 className="text-2xl font-bold mb-4">Lets connect with new peoples</h1>
-                    <div className="w-full space-y-8">
-                        {
-                            (isPendingNonFriend || isPending) ? <Skeleton /> :
-                                (data?.users &&
-                                    data?.users.map((user) => (
-                                        <UserProfile
-                                            key={user.id}
-                                            id={user.id}
-                                            name={user.name}
-                                            avatar={user.avatar}
-                                            actions={getActions(user)}
-                                        />
-                                    ))
-                                )
-                        }
-                    </div>
-                </div>
-            </main>
-        </div>
-    )
+  return (
+    <div className="mx-auto max-w-3xl p-8">
+      <h1 className="mb-6 text-2xl font-bold text-foreground">
+        Let&apos;s connect with new people
+      </h1>
+      <div className="space-y-6">
+        {isPending ? (
+          <Skeleton />
+        ) : users.length ? (
+          users.map((user) => (
+            <UserProfile
+              key={user.id}
+              id={user.id}
+              name={user.name}
+              avatar={user.avatar}
+              actions={[
+                {
+                  label: sending ? 'Sending…' : 'Send Request',
+                  onClick: () => sendRequest(user.id),
+                  disabled: sending,
+                },
+              ]}
+            />
+          ))
+        ) : (
+          <p className="text-t-muted">No new people to connect with right now.</p>
+        )}
+      </div>
+    </div>
+  );
 }
-
-export default page

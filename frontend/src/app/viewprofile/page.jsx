@@ -1,173 +1,125 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Camera, Pencil } from "lucide-react";
-import { useMe } from "@/hooks/useMe";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/api";
 import { toast } from "react-toastify";
+import { useMe } from "@/hooks/useMe";
+import { apiRequest } from "@/lib/api";
+
+// Only these fields are accepted by the API DTO. Sending anything else (id,
+// email, avatar URL, createdAt…) makes the request fail validation.
+const EDITABLE_FIELDS = ["name", "username", "gender", "age", "phoneNumber"];
 
 export default function ProfilePage() {
   const { data: user, isLoading } = useMe();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({});
   const [edit, setEdit] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState("/profile.webp");
+  const [edits, setEdits] = useState({});
   const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
-  /* ---------------- SYNC FORM WITH USER DATA ---------------- */
-
-  useEffect(() => {
-    if (user) {
-      setForm(user);
-      setAvatarPreview(user.avatar || "/profile.webp");
-    }
-  }, [user]);
-
-  /* ---------------- INPUT HANDLERS ---------------- */
+  // Display value = pending edit if any, otherwise the loaded profile.
+  const value = (key) => (key in edits ? edits[key] : (user?.[key] ?? ""));
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setEdits((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
-
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  /* ---------------- UPDATE PROFILE MUTATION ---------------- */
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
       const formData = new FormData();
-
-      Object.keys(form).forEach((key) => {
-        if (form[key] !== null && form[key] !== undefined) {
-          formData.append(key, form[key]);
-        }
-      });
-
-      if (avatarFile) {
-        formData.append("avatar", avatarFile);
+      for (const key of EDITABLE_FIELDS) {
+        if (key in edits) formData.append(key, String(edits[key]));
       }
+      if (avatarFile) formData.append("avatar", avatarFile);
 
-      const data = await apiRequest({
+      return apiRequest({
         url: "/user/updatemyprofile",
         method: "POST",
         data: formData,
       });
-
-      return data.user;
     },
     onSuccess: () => {
-      // Invalidate and refetch the profile query - this will update Sidebar automatically!
       queryClient.invalidateQueries({ queryKey: ["me"] });
       setEdit(false);
+      setEdits({});
       setAvatarFile(null);
-      // Reset preview to show the updated avatar from server
-      if (user) {
-        setAvatarPreview(user.avatar || "/profile.webp");
-      }
+      setAvatarPreview(null);
       toast.success("Profile has been updated!");
     },
     onError: (err) => {
-      const errorMessage = err.response?.data?.message || err.message || "Failed to update profile";
-      toast.error(errorMessage);
+      toast.error(err.response?.data?.message || "Failed to update profile");
     },
   });
 
-  /*----------------------- Validation Function -----------------------------*/
   const validateForm = () => {
-    // Name validation
-    if (!form.name || form.name.trim().length < 2) {
+    const name = String(value("name") ?? "").trim();
+    if (name.length < 2) {
       toast.error("Name must be at least 2 characters");
       return false;
     }
-
-    if (!/^[A-Za-z\s]+$/.test(form.name)) {
-      toast.error("Name can only contain letters and spaces");
-      return false;
-    }
-
-    // Username validation
-    if (!form.username || form.username.length < 3) {
+    const username = String(value("username") ?? "");
+    if (username.length < 3) {
       toast.error("Username must be at least 3 characters");
       return false;
     }
-
-    // Phone validation
-    if (form.phoneNumber) {
-      if (!/^\d+$/.test(form.phoneNumber)) {
-        toast.error("Phone number must contain only numbers");
-        return false;
-      }
-
-      if (form.phoneNumber.length < 10 || form.phoneNumber.length > 15) {
-        toast.error("Phone number must be between 10 and 15 digits");
+    const phone = String(value("phoneNumber") ?? "");
+    if (phone && !/^\d{10,15}$/.test(phone)) {
+      toast.error("Phone number must be 10–15 digits");
+      return false;
+    }
+    const age = value("age");
+    if (age !== "" && age != null) {
+      const n = Number(age);
+      if (!Number.isFinite(n) || n < 1 || n > 150) {
+        toast.error("Age must be between 1 and 150");
         return false;
       }
     }
-
-    // Age validation
-    if (form.age) {
-      const age = Number(form.age);
-
-      if (isNaN(age) || age <= 0) {
-        toast.error("Age must be a valid number");
-        return false;
-      }
-
-      if (age > 150) {
-        toast.error("Age cannot be greater than 150");
-        return false;
-      }
-    }
-
     return true;
-  };
-
-  const updateProfile = () => {
-    if (!validateForm()) return;
-    updateProfileMutation.mutate();
   };
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto p-8 flex items-center justify-center">
-        <div className="text-gray-500">Loading profile...</div>
+      <div className="mx-auto flex max-w-4xl items-center justify-center p-8 text-t-muted">
+        Loading profile…
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="max-w-4xl mx-auto p-8 flex items-center justify-center">
-        <div className="text-gray-500">No user data available</div>
+      <div className="mx-auto flex max-w-4xl items-center justify-center p-8 text-t-muted">
+        No user data available
       </div>
     );
   }
 
-  /* ---------------- UI ---------------- */
-
   return (
-    <div className="max-w-4xl mx-auto p-8">
-      {/* HEADER */}
-      <div className="flex items-center gap-6 mb-10">
+    <div className="mx-auto max-w-4xl p-8">
+      <div className="mb-10 flex items-center gap-6">
         <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={avatarPreview || user.avatar || "/profile.webp"}
-            className="h-24 w-24 rounded-full object-cover border"
+            alt="Your avatar"
+            className="h-24 w-24 rounded-full border border-t-border object-cover"
           />
-
           {edit && (
-            <label className="absolute bottom-0 right-0 bg-orange-500 p-2 rounded-full cursor-pointer">
+            <label className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-t-primary p-2">
               <Camera size={16} className="text-white" />
               <input
                 type="file"
                 hidden
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 onChange={handleAvatarChange}
               />
             </label>
@@ -175,74 +127,75 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <h2 className="text-2xl font-semibold text-gray-800">{user.name}</h2>
-          <p className="text-gray-500">{user.email}</p>
+          <h2 className="text-2xl font-semibold text-foreground">{user.name}</h2>
+          <p className="text-t-muted">{user.email}</p>
         </div>
 
         <button
-          onClick={() => setEdit(!edit)}
-          className="ml-auto flex items-center gap-2 px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer"
+          onClick={() => {
+            setEdit((v) => !v);
+            setEdits({});
+            setAvatarFile(null);
+            setAvatarPreview(null);
+          }}
+          className="ml-auto flex cursor-pointer items-center gap-2 rounded-lg border border-t-border px-4 py-2 text-foreground hover:bg-t-hover"
         >
           <Pencil size={16} />
           {edit ? "Cancel" : "Edit"}
         </button>
       </div>
 
-      {/* FORM */}
-      <div className="grid grid-cols-2 gap-6">
-        <Input
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <Field
           label="Name"
           name="name"
-          value={form.name || ""}
+          value={value("name")}
           disabled={!edit}
           onChange={handleChange}
         />
-
-        <Input
+        <Field
           label="Username"
           name="username"
-          value={form.username || ""}
+          value={value("username")}
           disabled={!edit}
           onChange={handleChange}
         />
-
-        <Input
-          label="Email"
-          value={form.email || ""}
-          disabled
-        />
-
-        <Input
+        <Field label="Email" value={user.email} disabled onChange={() => {}} />
+        <Field
           label="Phone Number"
           name="phoneNumber"
           type="tel"
-          value={form.phoneNumber || ""}
+          value={value("phoneNumber")}
           disabled={!edit}
-          onChange={(e) => {
-            const value = e.target.value.replace(/\D/g, "");
-            setForm({ ...form, phoneNumber: value });
-          }}
+          onChange={(e) =>
+            setEdits((prev) => ({
+              ...prev,
+              phoneNumber: e.target.value.replace(/\D/g, ""),
+            }))
+          }
         />
-
-        <Input
+        <Field
           label="Age"
           name="age"
           type="number"
           min="1"
           max="150"
-          value={form.age || ""}
+          value={value("age")}
           disabled={!edit}
           onChange={handleChange}
         />
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm text-gray-500">Gender</label>
+          <label htmlFor="gender" className="text-sm text-t-muted">
+            Gender
+          </label>
           <select
+            id="gender"
             name="gender"
             disabled={!edit}
-            value={form.gender || ""}
+            value={value("gender")}
             onChange={handleChange}
-            className="border rounded-lg px-4 py-2 text-gray-700 disabled:border-0 disabled:border-gray-300 disabled:bg-gray-100"
+            className="rounded-lg border border-t-border bg-background px-4 py-2 text-foreground disabled:opacity-60"
           >
             <option value="">Select Gender</option>
             <option value="male">Male</option>
@@ -254,26 +207,26 @@ export default function ProfilePage() {
 
       {edit && (
         <button
-          onClick={updateProfile}
+          onClick={() => {
+            if (validateForm()) updateProfileMutation.mutate();
+          }}
           disabled={updateProfileMutation.isPending}
-          className="mt-10 w-full bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-10 w-full rounded-xl bg-t-primary py-3 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {updateProfileMutation.isPending ? "Updating..." : "Update"}
+          {updateProfileMutation.isPending ? "Updating…" : "Update"}
         </button>
       )}
     </div>
   );
 }
 
-/* ---------------- REUSABLE INPUT ---------------- */
-
-function Input({ label, ...props }) {
+function Field({ label, ...props }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-gray-500">{label}</label>
+      <label className="text-sm text-t-muted">{label}</label>
       <input
         {...props}
-        className="disabled:border-0 border disabled:border-gray-300 rounded-lg px-4 disabled:px-0 py-2 disabled:bg-gray-100 text-gray-700"
+        className="rounded-lg border border-t-border bg-background px-4 py-2 text-foreground disabled:opacity-60"
       />
     </div>
   );

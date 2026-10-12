@@ -1,102 +1,159 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FriendRequest } from './entity/friendrequest.entity.js';
+import { Repository } from 'typeorm';
+import {
+  FriendRequest,
+  FriendRequestStatus,
+} from './entity/friendrequest.entity';
 import { User } from '../user/entity/user.entity';
-import { Repository, Not, In } from 'typeorm';
-import { NotificationService } from '../notification/notification.service.js';
+import { NotificationService } from '../notification/notification.service';
+
+/** Days a user must wait before re-sending a request after a rejection. */
+const REJECTION_COOLDOWN_DAYS = 7;
+
+function orderedPair(a: number, b: number): [number, number] {
+  return a < b ? [a, b] : [b, a];
+}
 
 @Injectable()
 export class RequestService {
   constructor(
     @InjectRepository(FriendRequest)
-    private friendRequestRepository: Repository<FriendRequest>,
+    private readonly friendRequestRepository: Repository<FriendRequest>,
     @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private readonly userRepository: Repository<User>,
     private readonly notificationService: NotificationService,
   ) {}
 
+  private async requireUser(userId: number): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  /** Accepted friendships for a user, one query for pairs + one for users. */
   async getAllFriends(userId: number) {
-    // Get all ACCEPTED friend requests where user is either sender or receiver
-    const friendRequests = await this.friendRequestRepository
-      .createQueryBuilder('fr')
-      .innerJoin(
-        'users',
-        'u',
-        'u.id = CASE WHEN fr.senderId = :userId THEN fr.receiverId ELSE fr.senderId END',
-      )
-      .where('(fr.senderId = :userId OR fr.receiverId = :userId)', { userId })
-      .andWhere('fr.status = :status', { status: 'ACCEPTED' })
-      .select([
-        'fr.id AS "friendshipId"',
-        'fr."createdAt" AS "friendsSince"',
-        'u.id AS "friend_id"',
-        'u.name AS "friend_name"',
-        'u.username AS "friend_username"',
-        'u.email AS "friend_email"',
-        'u.avatar AS "friend_avatar"',
-        'u.gender AS "friend_gender"',
-        'u.age AS "friend_age"',
-        'u.phoneNumber AS "friend_phoneNumber"',
-      ])
-      .orderBy('fr."createdAt"', 'DESC')
-      .getRawMany();
+    const links = await this.friendRequestRepository.find({
+      where: [
+        { senderId: userId, status: FriendRequestStatus.ACCEPTED },
+        { receiverId: userId, status: FriendRequestStatus.ACCEPTED },
+      ],
+      order: { respondedAt: 'DESC', createdAt: 'DESC' },
+    });
 
-    const friends = friendRequests.map((row) => ({
-      friendshipId: row.friendshipId,
-      friendsSince: row.friendsSince,
-      friend: {
-        id: row.friend_id,
-        name: row.friend_name,
-        username: row.friend_username,
-        email: row.friend_email,
-        avatar: row.friend_avatar,
-        gender: row.friend_gender,
-        age: row.friend_age,
-        phoneNumber: row.friend_phoneNumber,
-      },
-    }));
+    const friendIds = [
+      ...new Set(
+        links.map((l) => (l.senderId === userId ? l.receiverId : l.senderId)),
+      ),
+    ];
 
-    return {
-      message: 'Friends fetched successfully',
-      count: friends.length,
-      friends,
-    };
+    const users = friendIds.length
+      ? await this.userRepository
+          .createQueryBuilder('u')
+          .where('u.id IN (:...ids)', { ids: friendIds })
+          .getMany()
+      : ([] as User[]);
+    const byId = new Map(users.map((u) => [u.id, u]));
+
+    const friends = links
+      .map((link) => {
+        const otherId =
+          link.senderId === userId ? link.receiverId : link.senderId;
+        const other = byId.get(otherId);
+        if (!other) return null;
+        const showEmail = other.privacy?.showEmailToFriends ?? true;
+        const showPhone = other.privacy?.showPhoneToFriends ?? true;
+        return {
+          friendshipId: link.id,
+          friendsSince: link.respondedAt ?? link.createdAt,
+          friend: {
+            id: other.id,
+            name: other.name,
+            username: other.username,
+            avatar: other.avatar ?? null,
+            gender: other.gender,
+            age: other.age,
+            email: showEmail ? other.email : null,
+            phoneNumber: showPhone ? other.phoneNumber : null,
+          },
+        };
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null);
+
+    return { count: friends.length, friends };
   }
 
   async sendFriendRequest(userId: number, receiverId: number) {
-    const senderId = userId;
-
-    if (senderId === receiverId) {
-      return {
-        message: 'You cannot send a friend request to yourself',
-      };
+    if (userId === receiverId) {
+      throw new BadRequestException(
+        'You cannot send a friend request to yourself',
+      );
     }
 
-    const existingRequest = await this.friendRequestRepository.findOne({
+    await this.requireUser(receiverId);
+
+    const [userLowId, userHighId] = orderedPair(userId, receiverId);
+
+    const live = await this.friendRequestRepository.findOne({
       where: [
-        { senderId, receiverId, status: 'PENDING' },
-        { senderId: receiverId, receiverId: senderId, status: 'PENDING' },
-        { senderId, receiverId, status: 'ACCEPTED' },
-        { senderId: receiverId, receiverId: senderId, status: 'ACCEPTED' },
+        { userLowId, userHighId, status: FriendRequestStatus.PENDING },
+        { userLowId, userHighId, status: FriendRequestStatus.ACCEPTED },
       ],
     });
 
-    if (existingRequest) {
-      return {
-        message: 'A friend request already exists between these users',
-        request: existingRequest,
-      };
+    if (live) {
+      throw new ConflictException(
+        live.status === FriendRequestStatus.ACCEPTED
+          ? 'You are already friends'
+          : 'A friend request is already pending between you',
+      );
     }
 
-    const newRequest = this.friendRequestRepository.create({
-      senderId,
-      receiverId,
-      status: 'PENDING',
+    const lastRejected = await this.friendRequestRepository.findOne({
+      where: [
+        { userLowId, userHighId, status: FriendRequestStatus.REJECTED },
+        { userLowId, userHighId, status: FriendRequestStatus.CANCELLED },
+      ],
+      order: { respondedAt: 'DESC', createdAt: 'DESC' },
     });
 
-    await this.friendRequestRepository.save(newRequest);
+    if (lastRejected) {
+      const since = lastRejected.respondedAt ?? lastRejected.createdAt;
+      const cooldownEnds = new Date(
+        since.getTime() + REJECTION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
+      );
+      if (cooldownEnds.getTime() > Date.now()) {
+        throw new ConflictException(
+          `You can send another request after ${cooldownEnds.toISOString()}`,
+        );
+      }
+    }
+
+    const request = this.friendRequestRepository.create({
+      senderId: userId,
+      receiverId,
+      userLowId,
+      userHighId,
+      status: FriendRequestStatus.PENDING,
+    });
+
+    try {
+      await this.friendRequestRepository.save(request);
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        throw new ConflictException('A friend request is already pending');
+      }
+      throw err;
+    }
+
     const sender = await this.userRepository.findOne({
-      where: { id: senderId },
+      where: { id: userId },
       select: ['id', 'name', 'avatar'],
     });
     await this.notificationService.notify(receiverId, 'FRIEND_REQUEST_SENT', {
@@ -105,18 +162,15 @@ export class RequestService {
       senderAvatar: sender?.avatar,
     });
 
-    return {
-      message: 'Friend request sent successfully',
-      request: newRequest,
-    };
+    return { request };
   }
 
   async getAllFriendRequests(userId: number) {
-    const raw = await this.friendRequestRepository
+    const requests = await this.friendRequestRepository
       .createQueryBuilder('fr')
       .innerJoin('users', 'u', 'u.id = fr."senderId"')
       .where('fr."receiverId" = :userId', { userId })
-      .andWhere('fr.status = :status', { status: 'PENDING' })
+      .andWhere('fr.status = :status', { status: FriendRequestStatus.PENDING })
       .orderBy('fr."createdAt"', 'DESC')
       .select([
         'fr.id AS "requestId"',
@@ -124,53 +178,99 @@ export class RequestService {
         'fr."createdAt" AS "createdAt"',
         'u.id AS "sender_id"',
         'u.name AS "sender_name"',
+        'u.username AS "sender_username"',
         'u.avatar AS "sender_avatar"',
       ])
-      .getRawMany();
-
-    const requests = raw.map((r) => ({
-      id: r.requestId,
-      status: r.status,
-      createdAt: r.createdAt,
-      sender: {
-        id: r.sender_id,
-        name: r.sender_name,
-        avatar: r.sender_avatar,
-      },
-    }));
+      .getRawMany<{
+        requestId: number;
+        status: FriendRequestStatus;
+        createdAt: Date;
+        sender_id: number;
+        sender_name: string;
+        sender_username: string | null;
+        sender_avatar: string | null;
+      }>();
 
     return {
-      message: 'All friend requests fetched successfully',
-      requests,
+      requests: requests.map((r) => ({
+        id: r.requestId,
+        status: r.status,
+        createdAt: r.createdAt,
+        sender: {
+          id: r.sender_id,
+          name: r.sender_name,
+          username: r.sender_username,
+          avatar: r.sender_avatar,
+        },
+      })),
     };
   }
 
-  async acceptFriendRequest(userId: number, requestId: number) {
-    // Find the friend request
+  async getAllSentRequests(userId: number) {
+    const requests = await this.friendRequestRepository
+      .createQueryBuilder('fr')
+      .innerJoin('users', 'u', 'u.id = fr."receiverId"')
+      .where('fr."senderId" = :userId', { userId })
+      .andWhere('fr.status = :status', { status: FriendRequestStatus.PENDING })
+      .orderBy('fr."createdAt"', 'DESC')
+      .select([
+        'fr.id AS "requestId"',
+        'fr.status AS "status"',
+        'fr."createdAt" AS "createdAt"',
+        'u.id AS "receiver_id"',
+        'u.name AS "receiver_name"',
+        'u.username AS "receiver_username"',
+        'u.avatar AS "receiver_avatar"',
+      ])
+      .getRawMany<{
+        requestId: number;
+        status: FriendRequestStatus;
+        createdAt: Date;
+        receiver_id: number;
+        receiver_name: string;
+        receiver_username: string | null;
+        receiver_avatar: string | null;
+      }>();
+
+    return {
+      requests: requests.map((r) => ({
+        id: r.requestId,
+        status: r.status,
+        createdAt: r.createdAt,
+        receiver: {
+          id: r.receiver_id,
+          name: r.receiver_name,
+          username: r.receiver_username,
+          avatar: r.receiver_avatar,
+        },
+      })),
+    };
+  }
+
+  private async loadPendingRequest(requestId: number): Promise<FriendRequest> {
     const request = await this.friendRequestRepository.findOne({
       where: { id: requestId },
     });
+    if (!request) throw new NotFoundException('Friend request not found');
+    return request;
+  }
 
-    if (!request) {
-      return { message: 'Friend request not found' };
-    }
+  async acceptFriendRequest(userId: number, requestId: number) {
+    const request = await this.loadPendingRequest(requestId);
 
-    // Only the receiver can accept the request
     if (request.receiverId !== userId) {
-      return {
-        message: 'You are not authorized to accept this friend request',
-      };
+      throw new ForbiddenException('You cannot respond to this request');
+    }
+    if (request.status !== FriendRequestStatus.PENDING) {
+      throw new ConflictException(
+        `Friend request is already ${request.status.toLowerCase()}`,
+      );
     }
 
-    // If request is already accepted or rejected, do nothing
-    if (request.status !== 'PENDING') {
-      return {
-        message: `Friend request is already ${request.status.toLowerCase()}`,
-      };
-    }
-
-    request.status = 'ACCEPTED';
+    request.status = FriendRequestStatus.ACCEPTED;
+    request.respondedAt = new Date();
     await this.friendRequestRepository.save(request);
+
     const receiver = await this.userRepository.findOne({
       where: { id: userId },
       select: ['id', 'name'],
@@ -178,45 +278,28 @@ export class RequestService {
     await this.notificationService.notify(
       request.senderId,
       'FRIEND_REQUEST_ACCEPTED',
-      {
-        receiverId: receiver?.id,
-        receiverName: receiver?.name,
-      },
+      { receiverId: receiver?.id, receiverName: receiver?.name },
     );
 
-    // (Optional) Add code to update user's friends list if needed
-
-    return {
-      message: 'Friend request accepted successfully',
-      request,
-    };
+    return { request };
   }
 
   async rejectFriendRequest(userId: number, requestId: number) {
-    const request = await this.friendRequestRepository.findOne({
-      where: { id: requestId },
-    });
+    const request = await this.loadPendingRequest(requestId);
 
-    if (!request) {
-      return { message: 'Friend request not found' };
-    }
-
-    // Only the receiver can accept the request
     if (request.receiverId !== userId) {
-      return {
-        message: 'You are not authorized to accept this friend request',
-      };
+      throw new ForbiddenException('You cannot respond to this request');
+    }
+    if (request.status !== FriendRequestStatus.PENDING) {
+      throw new ConflictException(
+        `Friend request is already ${request.status.toLowerCase()}`,
+      );
     }
 
-    // If request is already accepted or rejected, do nothing
-    if (request.status !== 'PENDING') {
-      return {
-        message: `Friend request is already ${request.status.toLowerCase()}`,
-      };
-    }
-
-    request.status = 'REJECTED';
+    request.status = FriendRequestStatus.REJECTED;
+    request.respondedAt = new Date();
     await this.friendRequestRepository.save(request);
+
     const receiver = await this.userRepository.findOne({
       where: { id: userId },
       select: ['id', 'name'],
@@ -224,72 +307,80 @@ export class RequestService {
     await this.notificationService.notify(
       request.senderId,
       'FRIEND_REQUEST_REJECTED',
-      {
-        receiverId: receiver?.id,
-        receiverName: receiver?.name,
-      },
+      { receiverId: receiver?.id, receiverName: receiver?.name },
     );
 
-    return {
-      message: 'Friend request rejected successfully',
-      request,
-    };
+    return { request };
   }
 
-  async getAllNonAcceptedUser(userId: number) {
-    // Get IDs of users with PENDING or ACCEPTED relationships
-    const excludedUserIds = await this.friendRequestRepository
-      .createQueryBuilder('fr')
-      .select(
-        'CASE WHEN fr.senderId = :userId THEN fr.receiverId ELSE fr.senderId END',
-        'userId',
-      )
-      .where('(fr.senderId = :userId OR fr.receiverId = :userId)', { userId })
-      .andWhere('fr.status IN (:...statuses)', {
-        statuses: ['PENDING', 'ACCEPTED'],
-      })
-      .getRawMany();
+  /** Sender withdraws their own pending request. */
+  async cancelFriendRequest(userId: number, requestId: number) {
+    const request = await this.loadPendingRequest(requestId);
 
-    const excludedIds = excludedUserIds.map((row) => row.userId);
-
-    // Query users excluding those IDs
-    const queryBuilder = this.userRepository
-      .createQueryBuilder('user')
-      .where('user.id != :userId', { userId });
-
-    if (excludedIds.length > 0) {
-      queryBuilder.andWhere('user.id NOT IN (:...excludedIds)', {
-        excludedIds,
-      });
+    if (request.senderId !== userId) {
+      throw new ForbiddenException('You can only cancel requests you sent');
+    }
+    if (request.status !== FriendRequestStatus.PENDING) {
+      throw new ConflictException(
+        `Friend request is already ${request.status.toLowerCase()}`,
+      );
     }
 
-    const users = await queryBuilder
+    request.status = FriendRequestStatus.CANCELLED;
+    request.respondedAt = new Date();
+    await this.friendRequestRepository.save(request);
+    return { success: true };
+  }
+
+  /** Strangers the user can still reach out to. Never exposes email/phone. */
+  async getAllNonAcceptedUser(userId: number) {
+    const related = await this.friendRequestRepository.find({
+      where: [
+        { senderId: userId, status: FriendRequestStatus.PENDING },
+        { receiverId: userId, status: FriendRequestStatus.PENDING },
+        { senderId: userId, status: FriendRequestStatus.ACCEPTED },
+        { receiverId: userId, status: FriendRequestStatus.ACCEPTED },
+      ],
+      select: ['senderId', 'receiverId'],
+    });
+
+    const excludedIds = new Set<number>();
+    for (const r of related) {
+      excludedIds.add(r.senderId === userId ? r.receiverId : r.senderId);
+    }
+    excludedIds.add(userId);
+
+    const users = await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.id NOT IN (:...ids)', { ids: [...excludedIds] })
       .select([
         'user.id',
         'user.name',
         'user.username',
-        'user.email',
         'user.avatar',
         'user.gender',
         'user.age',
-        'user.phoneNumber',
-        'user.createdAt',
       ])
+      .orderBy('user.name', 'ASC')
+      .limit(100)
       .getMany();
 
-    return {
-      message: 'Users who are not friends fetched successfully',
-      users,
-    };
+    return { users };
   }
 
   async unfriend(userId: number, friendId: number) {
-    await this.friendRequestRepository.delete({
-      status: 'ACCEPTED',
-      senderId: In([userId, friendId]),
-      receiverId: In([userId, friendId]),
+    if (userId === friendId) {
+      throw new BadRequestException('You cannot unfriend yourself');
+    }
+    const [userLowId, userHighId] = orderedPair(userId, friendId);
+    const result = await this.friendRequestRepository.delete({
+      userLowId,
+      userHighId,
+      status: FriendRequestStatus.ACCEPTED,
     });
-
-    return { message: 'Unfriended successfully' };
+    if (result.affected === 0) {
+      throw new NotFoundException('You are not friends with this user');
+    }
+    return { success: true };
   }
 }

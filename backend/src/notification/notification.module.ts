@@ -13,12 +13,7 @@ import { getJwtSecret } from 'src/config/env';
       secret: getJwtSecret(),
     }),
   ],
-  providers: [
-    NotificationService,
-    NotificationGateway,
-  ],
-  exports: [
-    NotificationService,
-  ],
+  providers: [NotificationService, NotificationGateway],
+  exports: [NotificationService],
 })
 export class NotificationModule {}

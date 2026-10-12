@@ -1,31 +1,36 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse, NextRequest } from "next/server";
 
+/**
+ * Route protection based on the HttpOnly refresh cookie.
+ *
+ * The access token is never stored in a cookie or localStorage anymore, so the
+ * only server-visible signal of a session is the refresh cookie set by the API.
+ */
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get('token')?.value;
+  const hasSession = Boolean(req.cookies.get("refresh_token")?.value);
 
-  // Define public routes (auth pages)
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAuthPage = pathname === "/login" || pathname === "/register";
 
-  // If user has token and tries to access auth pages, redirect to home
-  if (token && isAuthPage) {
-    return NextResponse.redirect(new URL('/', req.url));
+  // Signed-in users shouldn't see the auth pages.
+  if (hasSession && isAuthPage) {
+    const redirect = req.nextUrl.searchParams.get("redirect");
+    return NextResponse.redirect(new URL(redirect || "/chat", req.url));
   }
 
-  // If user has no token and tries to access protected routes, redirect to login
-  if (!token && !isAuthPage) {
-    const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('redirect', pathname);
+  // Everyone else needs a session for protected routes.
+  if (!hasSession && !isAuthPage) {
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("redirect", pathname + req.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Allow the request to proceed
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    // Match all routes except static assets
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    // Match all routes except static assets.
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
