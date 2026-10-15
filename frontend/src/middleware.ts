@@ -30,7 +30,9 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all routes except static assets.
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    // Match all routes except static assets. `/api/` is excluded because those
+    // requests are rewritten to the backend; intercepting them would turn the
+    // login POST into a redirect to /login for anyone without a session yet.
+    "/((?!api/|_next/static|_next/image|favicon.ico).*)",
   ],
 };

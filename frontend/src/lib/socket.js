@@ -1,5 +1,5 @@
 import { io } from "socket.io-client";
-import { API_BASE_URL } from "./config";
+import { SOCKET_URL } from "./config";
 import { getAccessToken } from "./authStore";
 
 let socket = null;
@@ -15,7 +15,7 @@ export function getSocket() {
   if (!auth) return null;
 
   if (!socket) {
-    socket = io(API_BASE_URL, { ...auth, autoConnect: true });
+    socket = io(SOCKET_URL, { ...auth, autoConnect: true });
   } else {
     socket.auth = auth.auth;
     if (socket.disconnected) socket.connect();
@@ -29,7 +29,7 @@ export function getChatSocket() {
   if (!auth) return null;
 
   if (!chatSocket) {
-    chatSocket = io(`${API_BASE_URL}/chat`, { ...auth, autoConnect: true });
+    chatSocket = io(`${SOCKET_URL}/chat`, { ...auth, autoConnect: true });
   } else {
     chatSocket.auth = auth.auth;
     if (chatSocket.disconnected) chatSocket.connect();
