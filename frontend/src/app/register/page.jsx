@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
 import { setAccessToken } from '@/lib/authStore';
+import ThemeToggle from '../components/ThemeToggle';
+import Wordmark from '../components/Wordmark';
 
 function passwordStrength(password) {
   let score = 0;
@@ -15,13 +17,20 @@ function passwordStrength(password) {
 }
 
 const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-const STRENGTH_COLORS = [
+
+// Weak/strong is feedback, not brand colour: it uses the semantic tokens so it
+// reads the same in all four themes.
+const STRENGTH_COLOURS = [
   'bg-t-border',
-  'bg-red-500',
-  'bg-amber-500',
-  'bg-blue-500',
-  'bg-green-500',
+  'bg-t-danger',
+  'bg-t-warning',
+  'bg-t-primary',
+  'bg-t-primary',
 ];
+
+const FIELD =
+  'w-full rounded-lg border border-t-border-strong bg-background px-3.5 py-2.5 text-foreground outline-none placeholder:text-t-muted focus:border-t-primary';
+const LABEL = 'mb-1.5 block text-[13px] font-medium text-foreground';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -79,48 +88,51 @@ export default function RegisterPage() {
     }
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-t-border bg-background px-4 py-3 text-foreground outline-none placeholder:text-t-muted focus:border-t-primary focus:ring-2 focus:ring-t-primary';
-  const labelClass = 'mb-2 block text-sm font-medium text-foreground';
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-t-border bg-t-surface p-8 shadow-sm">
-          <div className="mb-8 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-t-primary">
-              <svg
-                className="h-8 w-8 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-3xl font-bold text-foreground">Create Account</h2>
-            <p className="mt-2 text-t-muted">Join us today and start chatting</p>
-          </div>
+    <div className="grid min-h-full md:grid-cols-[1.05fr_1fr]">
+      <section className="hidden flex-col justify-between border-r border-t-border bg-t-surface p-10 md:flex">
+        <Wordmark size="lg" />
+        <div className="rise-in">
+          <p className="font-display max-w-[15ch] text-[44px] text-foreground">
+            Start with your name.
+          </p>
+          <p className="mt-5 max-w-sm text-sm leading-6 text-t-muted">
+            Add the people you talk to most, then keep the conversation going wherever you
+            are.
+          </p>
+        </div>
+        <p className="text-xs text-t-muted">
+          You can change your details later from your profile.
+        </p>
+      </section>
+
+      <section className="flex flex-col px-5 py-6 sm:px-8 sm:py-10">
+        <div className="mb-8 flex items-center justify-between gap-3 md:justify-end">
+          <span className="md:hidden">
+            <Wordmark />
+          </span>
+          <ThemeToggle />
+        </div>
+
+        <div className="mx-auto w-full max-w-sm">
+          <h1 className="text-[26px] font-semibold text-foreground">Create an account</h1>
+          <p className="mt-1.5 text-sm text-t-muted">
+            Two details and you are in. Everything else can wait.
+          </p>
 
           {error && (
             <div
               role="alert"
-              className="mb-6 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"
+              className="mt-6 rounded-lg border border-t-danger bg-t-danger-surface px-3.5 py-3"
             >
-              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+              <p className="text-[13px] font-medium text-t-danger">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
             <div>
-              <label htmlFor="name" className={labelClass}>
-                Full Name
+              <label htmlFor="name" className={LABEL}>
+                Name
               </label>
               <input
                 id="name"
@@ -130,13 +142,13 @@ export default function RegisterPage() {
                 value={form.name}
                 onChange={handleChange}
                 required
-                className={inputClass}
-                placeholder="John Doe"
+                className={FIELD}
+                placeholder="Aarav Mehta"
               />
             </div>
 
             <div>
-              <label htmlFor="username" className={labelClass}>
+              <label htmlFor="username" className={LABEL}>
                 Username
               </label>
               <input
@@ -147,14 +159,14 @@ export default function RegisterPage() {
                 value={form.username}
                 onChange={handleChange}
                 required
-                className={inputClass}
-                placeholder="johndoe"
+                className={FIELD}
+                placeholder="aarav"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className={labelClass}>
-                Email Address
+              <label htmlFor="email" className={LABEL}>
+                Email
               </label>
               <input
                 id="email"
@@ -164,13 +176,13 @@ export default function RegisterPage() {
                 value={form.email}
                 onChange={handleChange}
                 required
-                className={inputClass}
+                className={FIELD}
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className={labelClass}>
+              <label htmlFor="password" className={LABEL}>
                 Password
               </label>
               <div className="relative">
@@ -182,21 +194,21 @@ export default function RegisterPage() {
                   value={form.password}
                   onChange={handleChange}
                   required
-                  className={`${inputClass} pr-16`}
+                  className={`${FIELD} pr-20`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-t-muted hover:text-foreground"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-t-muted transition-colors hover:bg-t-hover hover:text-foreground"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
               </div>
               {form.password && (
                 <div className="mt-2">
-                  <div className="mb-1 flex items-center justify-between">
+                  <div className="mb-1.5 flex items-center justify-between">
                     <span className="text-xs text-t-muted">Password strength</span>
                     <span className="text-xs font-medium text-foreground">
                       {STRENGTH_LABELS[strength]}
@@ -206,8 +218,8 @@ export default function RegisterPage() {
                     {[1, 2, 3, 4].map((level) => (
                       <div
                         key={level}
-                        className={`h-1 flex-1 rounded ${
-                          level <= strength ? STRENGTH_COLORS[strength] : 'bg-t-border'
+                        className={`h-1 flex-1 rounded-full ${
+                          level <= strength ? STRENGTH_COLOURS[strength] : 'bg-t-border'
                         }`}
                       />
                     ))}
@@ -217,8 +229,8 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className={labelClass}>
-                Confirm Password
+              <label htmlFor="confirmPassword" className={LABEL}>
+                Confirm password
               </label>
               <div className="relative">
                 <input
@@ -229,14 +241,14 @@ export default function RegisterPage() {
                   value={form.confirmPassword}
                   onChange={handleChange}
                   required
-                  className={`${inputClass} pr-16`}
+                  className={`${FIELD} pr-20`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm((v) => !v)}
                   aria-label={showConfirm ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-t-muted hover:text-foreground"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-t-muted transition-colors hover:bg-t-hover hover:text-foreground"
                 >
                   {showConfirm ? 'Hide' : 'Show'}
                 </button>
@@ -246,20 +258,20 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full rounded-lg bg-t-primary py-3 font-semibold text-white transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-t-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 w-full rounded-lg bg-t-primary py-2.5 text-sm font-semibold text-t-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoading ? 'Creating account…' : 'Create Account'}
+              {isLoading ? 'Creating account…' : 'Create account'}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-t-muted">
+          <p className="mt-6 text-sm text-t-muted">
             Already have an account?{' '}
-            <Link href="/login" className="font-semibold text-t-primary hover:underline">
+            <Link href="/login" className="font-medium text-t-primary hover:underline">
               Sign in
             </Link>
           </p>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

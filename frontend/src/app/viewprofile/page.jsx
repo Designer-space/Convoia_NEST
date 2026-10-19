@@ -1,19 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Pencil } from "lucide-react";
+import { Camera, Check, Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import { useMe } from "@/hooks/useMe";
 import { apiRequest } from "@/lib/api";
+import Avatar from "../components/Avatar";
+import { useTheme } from "../ThemeProvider";
+import { FALLBACK_THEME_ICON, THEME_ICONS } from "../components/themeIcons";
 
 // Only these fields are accepted by the API DTO. Sending anything else (id,
 // email, avatar URL, createdAt…) makes the request fail validation.
 const EDITABLE_FIELDS = ["name", "username", "gender", "age", "phoneNumber"];
 
+const FIELD =
+  "w-full rounded-lg border border-t-border-strong bg-background px-3.5 py-2.5 text-foreground outline-none placeholder:text-t-muted focus:border-t-primary disabled:opacity-70";
+
 export default function ProfilePage() {
   const { data: user, isLoading } = useMe();
   const queryClient = useQueryClient();
+  const { theme, setTheme, themes } = useTheme();
   const [edit, setEdit] = useState(false);
   const [edits, setEdits] = useState({});
   const [avatarFile, setAvatarFile] = useState(null);
@@ -89,33 +96,35 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto flex max-w-4xl items-center justify-center p-8 text-t-muted">
-        Loading profile…
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+        <p className="text-sm text-t-muted">Loading your profile…</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="mx-auto flex max-w-4xl items-center justify-center p-8 text-t-muted">
-        No user data available
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+        <p className="text-sm text-t-danger">
+          We couldn&apos;t load your profile. Reload the page to try again.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
-      <div className="mb-10 flex items-center gap-6">
+    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+      <header className="mb-7 flex items-center gap-4">
         <div className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={avatarPreview || user.avatar || "/profile.webp"}
-            alt="Your avatar"
-            className="h-24 w-24 rounded-full border border-t-border object-cover"
+          <Avatar
+            src={avatarPreview || user.avatar}
+            size={72}
+            className="border border-t-border"
           />
           {edit && (
-            <label className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-t-primary p-2">
-              <Camera size={16} className="text-white" />
+            <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-t-border bg-t-primary text-t-on-primary">
+              <Camera size={15} aria-hidden="true" />
+              <span className="sr-only">Change photo</span>
               <input
                 type="file"
                 hidden
@@ -126,108 +135,176 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">{user.name}</h2>
-          <p className="text-t-muted">{user.email}</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[22px] font-semibold text-foreground">{user.name}</h1>
+          <p className="truncate text-[13px] text-t-muted">
+            {user.username ? `@${user.username} · ` : ""}
+            {user.email}
+          </p>
         </div>
 
         <button
+          type="button"
           onClick={() => {
             setEdit((v) => !v);
             setEdits({});
             setAvatarFile(null);
             setAvatarPreview(null);
           }}
-          className="ml-auto flex cursor-pointer items-center gap-2 rounded-lg border border-t-border px-4 py-2 text-foreground hover:bg-t-hover"
+          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-t-border-strong px-3.5 text-[13px] font-medium text-foreground transition-colors hover:bg-t-hover"
         >
-          <Pencil size={16} />
+          <Pencil size={15} aria-hidden="true" />
           {edit ? "Cancel" : "Edit"}
         </button>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <Field
-          label="Name"
-          name="name"
-          value={value("name")}
-          disabled={!edit}
-          onChange={handleChange}
-        />
-        <Field
-          label="Username"
-          name="username"
-          value={value("username")}
-          disabled={!edit}
-          onChange={handleChange}
-        />
-        <Field label="Email" value={user.email} disabled onChange={() => {}} />
-        <Field
-          label="Phone Number"
-          name="phoneNumber"
-          type="tel"
-          value={value("phoneNumber")}
-          disabled={!edit}
-          onChange={(e) =>
-            setEdits((prev) => ({
-              ...prev,
-              phoneNumber: e.target.value.replace(/\D/g, ""),
-            }))
-          }
-        />
-        <Field
-          label="Age"
-          name="age"
-          type="number"
-          min="1"
-          max="150"
-          value={value("age")}
-          disabled={!edit}
-          onChange={handleChange}
-        />
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="gender" className="text-sm text-t-muted">
-            Gender
-          </label>
-          <select
-            id="gender"
-            name="gender"
+      <section>
+        <h2 className="mb-3 text-[15px] font-semibold text-foreground">Your details</h2>
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-t-border bg-t-surface p-4 sm:grid-cols-2 sm:p-5">
+          <Field
+            label="Name"
+            name="name"
+            value={value("name")}
             disabled={!edit}
-            value={value("gender")}
             onChange={handleChange}
-            className="rounded-lg border border-t-border bg-background px-4 py-2 text-foreground disabled:opacity-60"
-          >
-            <option value="">Select Gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-      </div>
+          />
+          <Field
+            label="Username"
+            name="username"
+            value={value("username")}
+            disabled={!edit}
+            onChange={handleChange}
+          />
+          <Field label="Email" value={user.email} disabled onChange={() => {}} />
+          <Field
+            label="Phone number"
+            name="phoneNumber"
+            type="tel"
+            value={value("phoneNumber")}
+            disabled={!edit}
+            onChange={(e) =>
+              setEdits((prev) => ({
+                ...prev,
+                phoneNumber: e.target.value.replace(/\D/g, ""),
+              }))
+            }
+          />
+          <Field
+            label="Age"
+            name="age"
+            type="number"
+            min="1"
+            max="150"
+            value={value("age")}
+            disabled={!edit}
+            onChange={handleChange}
+          />
 
-      {edit && (
-        <button
-          onClick={() => {
-            if (validateForm()) updateProfileMutation.mutate();
-          }}
-          disabled={updateProfileMutation.isPending}
-          className="mt-10 w-full rounded-xl bg-t-primary py-3 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {updateProfileMutation.isPending ? "Updating…" : "Update"}
-        </button>
-      )}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="gender" className="text-[13px] font-medium text-t-muted">
+              Gender
+            </label>
+            <select
+              id="gender"
+              name="gender"
+              disabled={!edit}
+              value={value("gender")}
+              onChange={handleChange}
+              className={FIELD}
+            >
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        {edit && (
+          <button
+            type="button"
+            onClick={() => {
+              if (validateForm()) updateProfileMutation.mutate();
+            }}
+            disabled={updateProfileMutation.isPending}
+            className="mt-4 min-h-11 w-full rounded-lg bg-t-primary text-sm font-semibold text-t-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {updateProfileMutation.isPending ? "Saving…" : "Save changes"}
+          </button>
+        )}
+      </section>
+
+      <section className="mt-9">
+        <h2 className="text-[15px] font-semibold text-foreground">Appearance</h2>
+        <p className="mt-1 text-[13px] text-t-muted">
+          The theme Convoia uses on this device. Each preview is the theme itself.
+        </p>
+
+        <div role="radiogroup" aria-label="Theme" className="mt-4 grid gap-3 sm:grid-cols-2">
+          {themes.map((option) => {
+            const active = option.id === theme;
+            const Icon = THEME_ICONS[option.icon] ?? FALLBACK_THEME_ICON;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setTheme(option.id)}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                  active
+                    ? "border-t-primary bg-t-hover"
+                    : "border-t-border bg-t-surface hover:bg-t-hover"
+                }`}
+              >
+                {/* A miniature of the theme named on this element. */}
+                <span
+                  data-theme={option.id}
+                  aria-hidden="true"
+                  className="flex h-14 w-20 shrink-0 gap-1.5 rounded-lg border border-t-border bg-background p-1.5"
+                >
+                  <span className="flex w-6 flex-col gap-1 rounded bg-t-surface p-1">
+                    <span className="h-1 w-full rounded-full bg-t-border" />
+                    <span className="h-1 w-3/4 rounded-full bg-t-primary" />
+                    <span className="h-1 w-2/3 rounded-full bg-t-border" />
+                  </span>
+                  <span className="flex flex-1 flex-col justify-end gap-1">
+                    <span className="h-2.5 w-2/3 self-start rounded border border-t-border bg-t-bubble-in" />
+                    <span className="h-2.5 w-1/2 self-end rounded bg-t-bubble-out" />
+                  </span>
+                </span>
+
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <Icon size={13} className="text-t-muted" aria-hidden="true" />
+                    <span className="truncate text-[13px] font-semibold text-foreground">
+                      {option.label}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-t-muted">
+                    {option.description}
+                  </span>
+                </span>
+
+                <Check
+                  size={16}
+                  aria-hidden="true"
+                  className={active ? "shrink-0 text-t-primary" : "shrink-0 opacity-0"}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
 
 function Field({ label, ...props }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm text-t-muted">{label}</label>
-      <input
-        {...props}
-        className="rounded-lg border border-t-border bg-background px-4 py-2 text-foreground disabled:opacity-60"
-      />
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[13px] font-medium text-t-muted">{label}</label>
+      <input {...props} className={FIELD} />
     </div>
   );
 }

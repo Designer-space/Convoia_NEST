@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
 import { setAccessToken } from '@/lib/authStore';
+import ThemeToggle from '../components/ThemeToggle';
+import Wordmark from '../components/Wordmark';
 
 function safeRedirect() {
   if (typeof window === 'undefined') return '/chat';
@@ -12,6 +14,9 @@ function safeRedirect() {
   if (target && target.startsWith('/') && !target.startsWith('//')) return target;
   return '/chat';
 }
+
+const FIELD =
+  'w-full rounded-lg border border-t-border-strong bg-background px-3.5 py-2.5 text-foreground outline-none placeholder:text-t-muted focus:border-t-primary';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -46,46 +51,51 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-t-border bg-t-surface p-8 shadow-sm">
-          <div className="mb-8 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-t-primary">
-              <svg
-                className="h-8 w-8 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-3xl font-bold text-foreground">Welcome Back</h2>
-            <p className="mt-2 text-t-muted">Sign in to continue to your account</p>
-          </div>
+    <div className="grid min-h-full md:grid-cols-[1.05fr_1fr]">
+      {/* Brand side: the only place the display serif gets to speak up. */}
+      <section className="hidden flex-col justify-between border-r border-t-border bg-t-surface p-10 md:flex">
+        <Wordmark size="lg" />
+        <div className="rise-in">
+          <p className="font-display max-w-[15ch] text-[44px] text-foreground">
+            Conversations, kept close.
+          </p>
+          <p className="mt-5 max-w-sm text-sm leading-6 text-t-muted">
+            Direct messages and group threads with the people you already know. Nothing to
+            configure, nothing to scroll past.
+          </p>
+        </div>
+        <p className="text-xs text-t-muted">
+          Your conversations stay private to the people in them.
+        </p>
+      </section>
+
+      <section className="flex flex-col px-5 py-6 sm:px-8 sm:py-10">
+        <div className="mb-8 flex items-center justify-between gap-3 md:justify-end">
+          <span className="md:hidden">
+            <Wordmark />
+          </span>
+          <ThemeToggle />
+        </div>
+
+        <div className="mx-auto w-full max-w-sm">
+          <h1 className="text-[26px] font-semibold text-foreground">Sign in</h1>
+          <p className="mt-1.5 text-sm text-t-muted">
+            Pick up your conversations where you left them.
+          </p>
 
           {error && (
             <div
               role="alert"
-              className="mb-6 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"
+              className="mt-6 rounded-lg border border-t-danger bg-t-danger-surface px-3.5 py-3"
             >
-              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+              <p className="text-[13px] font-medium text-t-danger">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
             <div>
-              <label
-                htmlFor="email"
-                className="mb-2 block text-sm font-medium text-foreground"
-              >
-                Email Address
+              <label htmlFor="email" className="mb-1.5 block text-[13px] font-medium text-foreground">
+                Email
               </label>
               <input
                 id="email"
@@ -95,7 +105,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-t-border bg-background px-4 py-3 text-foreground outline-none placeholder:text-t-muted focus:border-t-primary focus:ring-2 focus:ring-t-primary"
+                className={FIELD}
                 placeholder="you@example.com"
               />
             </div>
@@ -103,7 +113,7 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="password"
-                className="mb-2 block text-sm font-medium text-foreground"
+                className="mb-1.5 block text-[13px] font-medium text-foreground"
               >
                 Password
               </label>
@@ -116,14 +126,14 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full rounded-lg border border-t-border bg-background px-4 py-3 pr-16 text-foreground outline-none placeholder:text-t-muted focus:border-t-primary focus:ring-2 focus:ring-t-primary"
+                  className={`${FIELD} pr-20`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-t-muted hover:text-foreground"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-t-muted transition-colors hover:bg-t-hover hover:text-foreground"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -133,20 +143,20 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full rounded-lg bg-t-primary py-3 font-semibold text-white transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-t-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 w-full rounded-lg bg-t-primary py-2.5 text-sm font-semibold text-t-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoading ? 'Signing in…' : 'Sign In'}
+              {isLoading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-t-muted">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-semibold text-t-primary hover:underline">
-              Sign up
+          <p className="mt-6 text-sm text-t-muted">
+            New here?{' '}
+            <Link href="/register" className="font-medium text-t-primary hover:underline">
+              Create an account
             </Link>
           </p>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

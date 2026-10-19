@@ -1,49 +1,56 @@
-import Image from "next/image";
-import anyimg from "../../../public/profile3.jpg";
+import Avatar from "./Avatar";
 
-export function UserProfile({ name, avatar, actions }) {
+/**
+ * One person, one row: avatar, name, handle, and the actions that make sense
+ * for the list it appears in. Rows are separated by hairlines from the parent,
+ * so a list reads as one object rather than a stack of cards.
+ */
+export function UserProfile({ name, username, avatar, meta, actions }) {
   return (
-    <div className="w-full flex items-center justify-between border p-4 rounded-lg">
-      <div className="flex items-center gap-4">
-        <Image
-          src={avatar || anyimg}
-          alt={name}
-          width={40}
-          height={40}
-          className="rounded-full"
-        />
-        <p className="max-w-40 truncate">{name}</p>
+    <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Avatar src={avatar} size={44} />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+          {username ? (
+            <p className="truncate text-[13px] text-t-muted">@{username}</p>
+          ) : null}
+          {meta ? <p className="truncate text-[13px] text-t-muted">{meta}</p> : null}
+        </div>
       </div>
 
-      {actions && (
-        <div className="flex gap-2">
+      {actions?.length ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
           {actions.map((action, index) => (
             <button
               key={index}
+              type="button"
               onClick={action.onClick}
               disabled={action.disabled}
-              className={getButtonStyle(action.variant, action.disabled)}
+              className={actionClass(action.variant, action.disabled)}
             >
               {action.label}
             </button>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function getButtonStyle(variant, disabled) {
+function actionClass(variant, disabled) {
+  const base =
+    "inline-flex min-h-10 items-center justify-center rounded-lg px-3.5 text-[13px] font-medium transition-colors sm:min-h-9";
   if (disabled) {
-    return "border px-3 py-1 rounded bg-transparent cursor-not-allowed";
+    return `${base} cursor-not-allowed border border-t-border text-t-muted opacity-60`;
   }
 
   switch (variant) {
     case "danger":
-      return "border px-3 py-1 rounded bg-red-600 text-white cursor-pointer";
-    case "secondary":
-      return "border px-3 py-1 rounded bg-gray-300 ";
+      return `${base} cursor-pointer border border-t-border-strong text-t-danger hover:bg-t-danger-surface`;
+    case "quiet":
+      return `${base} cursor-pointer border border-t-border-strong text-foreground hover:bg-t-hover`;
     default:
-      return "border px-3 py-1 rounded bg-green-700 text-white cursor-pointer";
+      return `${base} cursor-pointer bg-t-primary text-t-on-primary hover:opacity-90`;
   }
 }
