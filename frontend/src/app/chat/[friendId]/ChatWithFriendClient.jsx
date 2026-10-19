@@ -46,15 +46,17 @@ export default function ChatWithFriendPage() {
 
   if (status === "error") {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <p className="text-red-500">Could not start conversation. Redirecting to chat...</p>
+      <div className="flex h-full items-center justify-center bg-background px-6 text-center">
+        <p className="text-sm text-t-danger">
+          We couldn&apos;t open that conversation. Taking you back to your chats…
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-      <p className="text-zinc-500">Opening conversation...</p>
+    <div className="flex h-full items-center justify-center bg-background">
+      <p className="text-sm text-t-muted">Opening conversation…</p>
     </div>
   );
 }
