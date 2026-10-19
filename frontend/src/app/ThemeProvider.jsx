@@ -3,34 +3,33 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 
 // ── Theme definitions ────────────────────────────────────────
+// `icon` is a key for the lucide icon map in components/themeIcons.js. Previews
+// are no longer hex values: components render a live miniature with
+// `data-theme={id}`, so a preview always matches the theme it advertises.
 export const THEMES = [
   {
     id: "light",
     label: "Light",
-    description: "Normal saturation",
-    icon: "☀️",
-    preview: { bg: "#F8FAFC", primary: "#3B82F6", surface: "#FFFFFF" },
+    description: "Paper and ink",
+    icon: "sun",
   },
   {
     id: "light-saturated",
     label: "Light Vivid",
-    description: "High saturation",
-    icon: "✨",
-    preview: { bg: "#FDF2F8", primary: "#EC4899", surface: "#FFE4E6" },
+    description: "Vivid pink",
+    icon: "sparkles",
   },
   {
     id: "dark",
     label: "Dark",
-    description: "Normal saturation",
-    icon: "🌙",
-    preview: { bg: "#0F172A", primary: "#6366F1", surface: "#1E293B" },
+    description: "Night ink",
+    icon: "moon",
   },
   {
     id: "dark-neon",
     label: "Neon",
-    description: "High saturation",
-    icon: "⚡",
-    preview: { bg: "#000000", primary: "#22D3EE", surface: "#111111" },
+    description: "Electric cyan",
+    icon: "zap",
   },
 ];
 
